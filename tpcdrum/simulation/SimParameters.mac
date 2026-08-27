@@ -1,13 +1,13 @@
 LKG4Manager/
-    VisMode 1
+    VisMode 0
     NPToolMode true
-    G4OutputFile test.root
+    G4OutputFile Uniform.root
     SuppressG4InitMessage true
 
 NPTool/
-    ReactionFile Ne20_3alpha.reaction
+    #ReactionFile Ne20_3alpha.reaction
     #ReactionFile SingleAlpha.reaction
-
+    ReactionFile SingleAlphaUniform.reaction
 TPCDrum/
     ##### TPCDrum Materials (He4 + CO2 gas mixture) #####
     GasPressure 650.        # Gas pressure [Torr], default 650 Torr
@@ -70,4 +70,4 @@ G4/
     tracking/verbose 0
     vis/verbose warnings
     run/setCutForAGivenParticle e- 100. mm
-    run/beamOn 1
+    run/beamOn 10000

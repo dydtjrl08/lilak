@@ -1,0 +1,22 @@
+Beam
+ Particle = 4He
+ ExcitationEnergy = 0 MeV
+ # TH1F Energy: kinetic energy uniformly distributed from 1 to 45 MeV.
+ EnergyProfilePath = uniform_theta_profile.root Energy
+ # First pad-layer centre:
+ #   y_pad = z_G4 + 66 mm, so y_pad=0 corresponds to z_G4=-66 mm.
+ # Equal values prevent NPTool from back-propagating x/y with the angles.
+ ZProfile = -66 mm
+ ZEmission = -66 mm
+ # TH2F XThetaX:
+ #   x_G4 profile (sigma=1 mm) versus ThetaX uniform in [-24,+24] deg.
+ # TH2F YPhiY:
+ #   y_G4 profile (sigma=5 mm) versus PhiY uniform in [-24,+24] deg.
+ # Since x_pad=-x_G4 and z_pad=y_G4+128.8 mm, these correspond to
+ # sigma(x_pad)=1 mm and sigma(z_pad)=5 mm.
+ XThetaXProfilePath = uniform_theta_profile.root XThetaX
+ YPhiYProfilePath = uniform_theta_profile.root YPhiY
+ # NPTool Beam has no event-by-event ZEmission distribution.
+ # Therefore y_pad is fixed at 0 here; sigma(y_pad)=6 mm requires a
+ # generator extension or a pre-generated event file.
+
