@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-27",
+  "local_root_version": "6.40.02",
+  "analysis_checks": 627,
+  "fixture": {
+    "source_events": 13,
+    "selected_direct_decays": 8,
+    "no_triplet": 3,
+    "ambiguous": 1,
+    "malformed": 1
+  },
+  "checks": [
+    "same-vertex recoil and secondaries excluded",
+    "same alpha in multiple Si detectors counted once",
+    "zero-Edep steps counted for arrival",
+    "strict Edep > threshold",
+    "no Si arrival retained in denominator",
+    "vertex edges, flow bins and reference regions",
+    "CSV 28 columns and 64 rows",
+    "persisted ROOT histograms, probability graphs and two canvases",
+    "input bytes unchanged"
+  ],
+  "interpreted_without_plus": true,
+  "svg_exports": {
+    "count": 2,
+    "nonempty": true
+  },
+  "pdf_export": {
+    "pages": 2,
+    "nonempty": true
+  },
+  "installer": {
+    "tests_passed": 3,
+    "cases": [
+      "existing files preserved byte-for-byte",
+      "existing destination refused",
+      "symlink destination refused"
+    ],
+    "bash_syntax_passed": true
+  },
+  "original_user_mc_tested": false,
+  "actual_server_root_6_24_tested": false,
+  "test_note": "Real ROOT I/O with test-only LILAK accessor stand-ins; not detector physics validation. Fixtures are not shipped.",
+  "files": [
+    {
+      "path": "C12_study_hoyle_si_by_vertex.C",
+      "sha256": "f30ef723e54a71ff724811f61845f5c08b2012e585a7d06b79b828efe167cfa8"
+    },
+    {
+      "path": "README_KO.txt",
+      "sha256": "3907118971b16ee5679033533943bc3f285f5670119e5cd8f6c2c86df9f52704"
+    },
+    {
+      "path": "checks/check_install_new_macro.py",
+      "sha256": "fdd23db80e3775a9cc20bc53b1e989de46af3b1bfadf876bfd407977f2422515"
+    },
+    {
+      "path": "install_new_macro.sh",
+      "sha256": "8cdc56796327513adbcb40db0f71a3d40cce2f168292b5fd953d0284052659ac"
+    }
+  ]
+}
