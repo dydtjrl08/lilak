@@ -62,6 +62,9 @@ class TrackFitBridgeTests(unittest.TestCase):
         self.assertEqual(diagnostics["status"], "missing_calibration")
         self.assertFalse(np.any(updates["fit_ok"]))
         self.assertFalse(np.any(updates["fit_valid_layer"]))
+        self.assertTrue(np.any(updates["fit_observed_layer_mask"]))
+        self.assertTrue(np.isfinite(updates["fit_measurement_points_uv_mm"]).all())
+        self.assertTrue(np.isfinite(updates["fit_measurement_covariance_uv_mm2"]).all())
         self.assertTrue(np.all(np.isnan(updates["fit_states"])))
         self.assertTrue(np.all(np.isnan(updates["track_directions_uvw"])))
         np.testing.assert_allclose(updates["fit_theta_pad_2d_ols_deg"],

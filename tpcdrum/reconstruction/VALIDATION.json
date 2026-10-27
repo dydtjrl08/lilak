@@ -2,11 +2,11 @@
   "date": "2026-10-27",
   "objective_complete": false,
   "software_checks": {
-    "tests": 116,
-    "passed": 116,
+    "tests": 169,
+    "passed": 169,
     "skipped": 0,
     "native_root_crosscheck": true,
-    "log": "tmp/reconstruction_checks_release_20261027.log"
+    "log": "tmp/reconstruction_seqvertex_final_checks.log"
   },
   "local_environment": {
     "python": "3.12.14",
@@ -42,5 +42,16 @@
     "Si energy/dead-layer/stopping and covariance inputs",
     "Independent held-out trajectory, vertex, energy, mass, angular-resolution/coverage validation"
   ],
-  "accuracy_claim": "None. Synthetic math closure and a small old-data pilot do not establish new-DDE detector precision."
+  "accuracy_claim": "None. Synthetic math closure and a small old-data pilot do not establish new-DDE detector precision.",
+  "sequential_vertex_study": {
+    "events": 24,
+    "eligible_closest_pairs": 18,
+    "prior_pilot_source_groups_excluded": 49,
+    "configuration_frozen_before_scoring": true,
+    "new_dde": false,
+    "physical_3d_calibrated": false,
+    "method_accepted_pairs_all_methods": 0,
+    "source": "references/sequential_vertex_pilot_20261027.json",
+    "definition": "Conditional charge-attribution recovery, projected initial-truth angle errors; not physical detector precision"
+  }
 }

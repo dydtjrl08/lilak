@@ -192,8 +192,11 @@ def fit_event(record, config, predictor=None):
         output["sequence_theta_segment_deg"] = np.asarray(predictions["theta_segment_deg"], dtype=float)
         output["sequence_valid_segment"] = np.asarray(predictions["valid_segment"], dtype=np.uint8)
         calibration, drift_error = _drift(config.get("drift"), record)
-        measurements, measured_cov, charge, _ = _waveform_measurements(record, {}, calibration)
+        measurements, measured_cov, charge, measured_valid = _waveform_measurements(record, {}, calibration)
         output["fit_layer_charge"] = charge
+        output["fit_measurement_points_uv_mm"] = measurements[:,:,:2].copy()
+        output["fit_measurement_covariance_uv_mm2"] = measured_cov[:,:,:2,:2].copy()
+        output["fit_observed_layer_mask"] = measured_valid.astype(np.uint8)
         for track, path in enumerate(paths):
             info = dict(track=track, status=path["status"], minimum_contiguous_layers=minimum,
                         component_domain_validated=False, physical_uncertainty_validated=False,

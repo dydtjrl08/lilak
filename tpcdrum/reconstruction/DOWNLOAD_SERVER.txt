@@ -2,13 +2,17 @@
 
 cd ~/workspace
 git clone --depth 1 --single-branch --branch codex/staged-tpc-reconstruction \
-  https://github.com/dydtjrl08/lilak.git lilak_reco_delivery_20261027
-python3 ~/workspace/lilak_reco_delivery_20261027/tpcdrum/reconstruction/install_new_reconstruction.py \
+  https://github.com/dydtjrl08/lilak.git lilak_reco_seqvertex_20261027
+python3 ~/workspace/lilak_reco_seqvertex_20261027/tpcdrum/reconstruction/install_new_reconstruction.py \
   ~/workspace/lilak_seunghwan
 
 이미 delivery 폴더가 있으면 clone은 멈춘다. 새 폴더 이름을 지정한다.
 기존 서버에 reconstruction 폴더나 같은 이름의 새 매크로가 있으면 설치도 멈춘다.
 이 경우 기존 파일을 지우지 말고 delivery clone에서 소스를 확인한다.
+기존 reconstruction이 설치되어 있으면 새 clone의 reconstruction_control.ipynb나
+run.py를 직접 실행하면 된다. input_roots는 원래 서버의 실제 digi 절대경로로,
+navigator.repo/parameters는 기존 LILAK repo와 설정 절대경로로 지정한다.
+예전 설치 폴더를 지우거나 덮어써야만 새 코드를 실행할 수 있는 것은 아니다.
 
 새 DDE digitization 전에도 현재 설정/물질 자료는 먼저 모을 수 있다.
 

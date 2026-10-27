@@ -28,6 +28,9 @@ def _empty(k):
                 fit_energy_first_point_mev=nan(k),
                 fit_measurement_points_uvw_mm=nan((k, 12, 3)),
                 fit_measurement_covariance_mm2=nan((k, 12, 3, 3)),
+                fit_measurement_points_uv_mm=nan((k, 12, 2)),
+                fit_measurement_covariance_uv_mm2=nan((k, 12, 2, 2)),
+                fit_observed_layer_mask=np.zeros((k,12),dtype=np.uint8),
                 fit_layer_charge=np.zeros((k, 12), dtype=np.float64),
                 fit_theta_pad_2d_ols_deg=nan(k),
                 fit_reference_v_mm=nan(k), fit_state_dimension=np.zeros(k, dtype=np.int64))
@@ -85,15 +88,16 @@ def _waveform_measurements(record, fitting, calibration):
             pad_weights = q.sum(axis=1) / total
             mean_u = float(pad_weights @ PAD_U_MM)
             positions[track, layer, :2] = [mean_u, LAYER_V_MM[layer]]
+            du = PAD_U_MM - mean_u
+            uu = float(pad_weights @ (du ** 2 + width_u))
+            covariance[track,layer,:2,:2] = [[uu,0.],[0.,12.**2/12.]]
             if calibration is None:
                 continue
             corrected_tb = t - calibration["_delay_tb"][layer, :, None]
             mean_tb = float(np.sum(q * corrected_tb) / total)
             scale = float(calibration["sign"]) * float(calibration["tb_ns"]) * float(calibration["velocity_mm_per_ns"])
             positions[track, layer, 2] = float(drift_coordinate(mean_tb, calibration))
-            du = PAD_U_MM - mean_u
             dt = corrected_tb - mean_tb
-            uu = float(pad_weights @ (du ** 2 + width_u))
             tt = float(np.sum(q * dt ** 2) / total) + 1. / 12.
             ut = float(np.sum(q * du[:, None] * dt) / total)
             covariance[track, layer] = [[uu, 0., scale * ut],
@@ -158,6 +162,9 @@ def _point_measurements(record, calibration, fitting):
             alpha = weights / total[track, depth]
             positions[track, depth, :2] = alpha @ points[ids, :2]
             valid[track, depth] = True
+            centered_uv=points[ids,:2]-positions[track,depth,:2]
+            cov[track,depth,:2,:2]=(np.einsum('i,ijk->jk',alpha,covariance[ids,:2,:2])+
+                                   (centered_uv.T*alpha)@centered_uv)
             if not physical:
                 continue
             positions[track, depth] = alpha @ points[ids]
@@ -249,6 +256,9 @@ def fit_event(record, config):
             measurements, covariance, charge, valid = _waveform_measurements(record, fitting, calibration)
             physical = calibration is not None
         updates["fit_layer_charge"] = charge
+        updates["fit_measurement_points_uv_mm"] = measurements[:,:,:2].copy()
+        updates["fit_measurement_covariance_uv_mm2"] = covariance[:,:,:2,:2].copy()
+        updates["fit_observed_layer_mask"] = valid.astype(np.uint8)
         diagnostics["layer_selection"] = dict(minimum_layers=min_layers,
                                              minimum_layer_charge_adc_tb=fitting.get("minimum_layer_charge_adc_tb", 0.),
                                              minimum_layer_peak_adc=fitting.get("minimum_layer_peak_adc", 0.))

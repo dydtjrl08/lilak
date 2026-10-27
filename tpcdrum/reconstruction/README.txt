@@ -1,6 +1,8 @@
 TPCDrum 단계별 재구성 개발판 — 2026-10-27
 
 현재 상태
+  Sequential clean-seed/soft-peel/두-track vertex/세 번째 track/공동 피팅 추가 사항은
+  README_SEQUENTIAL.txt를 참고한다. 기본 config는 이 새 경로를 사용한다.
   실제 기존 3C3 digi를 읽고 모든 단계 ROOT 저장/재시작을 확인했다.
   새 equal-energy DDE digi는 아직 만들어지지 않았다. 기존 3C3에는 관측 Si 에너지
   branch가 없어 그 파일로 새 DDE의 불변질량/120도 복원이 검증됐다고 할 수 없다.

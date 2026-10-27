@@ -51,7 +51,12 @@ def spacepoints_event(record,diagnostic,config):
 def finding_event(record,diagnostic,config):
     cfg=copy.deepcopy(config.get('finding',{}));cfg.setdefault('k',config.get('n_tracks',3))
     representation=config.get('representation','direct_waveform')
-    if representation=='space_points':
+    if cfg.get('method')=='sequential_vertex':
+        from .algorithms.sequential_finding import find_event
+        cfg['representation']=representation;cfg['drift']=copy.deepcopy(config.get('drift',{}))
+        cfg.setdefault('sequential',{})['proposal_mode']=representation
+        found=find_event(record,cfg)
+    elif representation=='space_points':
         from .spacepoint_finding import find_spacepoint_event
         found=find_spacepoint_event(record,cfg)
     elif representation=='direct_waveform':
@@ -68,6 +73,9 @@ def finding_event(record,diagnostic,config):
             'finding_max_charge_error_adc':np.float64(np.max(abs(found['components'].sum(0)+found['background']-q)))}
     for key in ('forward_components','forward_background','residual_waveform','point_fractions'):
         if key in found:values[key]=np.asarray(found[key])
+    for key,value in found.items():
+        if key.startswith('sequential_'):
+            values[key]=np.asarray(value)
     return values,dict(diagnostic,finding=dict(found['diagnostics'],representation=representation,
                 alpha_slots_not_mc_ids=True,zero_120_degree_constraint=True,configured_k=cfg['k'],output_k=k))
 
@@ -82,6 +90,9 @@ def fitting_event(record,diagnostic,config):
 
 
 def vertex_event(record,diagnostic,config):
+    if config.get('vertex',{}).get('method')=='joint_tracks':
+        from .joint_vertex_stage import vertex_event as handler
+        return handler(record,diagnostic,config)
     from .algorithms.vertex import fit_common_vertex
     k=len(record['components'])
     origins=np.asarray(record['track_origins_uvw_mm'],float)
@@ -127,7 +138,7 @@ def run_stage(stage,input_root,output_root,config):
     metadata={k:v for k,v in parent.items() if k not in ('numeric_fields','events','complete','stage')}
     metadata.update(config=config,parent_root=str(Path(input_root).resolve()),parent_sha256=sha256(input_root),
                     stage=stage,role='observations',physics_accuracy_evaluated=False)
-    success=[];conservation=[];angles=[];masses=[];dca=[];ambiguous=[];candidates=[];accepted_angles=[]
+    success=[];conservation=[];angles=[];masses=[];dca=[];ambiguous=[];candidates=[];accepted_angles=[];projected_vertex=[]
     started=time.monotonic()
     with StageWriter(output_root,stage,metadata) as writer:
         for i,(record,diagnostic) in enumerate(read_stage(input_root)):
@@ -139,6 +150,7 @@ def run_stage(stage,input_root,output_root,config):
             if 'com_opening_angles_deg' in row:angles.extend(row['com_opening_angles_deg'])
             if 'excitation_mev' in row:masses.append(float(row['excitation_mev']))
             if 'finding_ambiguous' in row:ambiguous.append(float(row['finding_ambiguous']))
+            if 'vertex_projected_valid' in row:projected_vertex.append(float(row['vertex_projected_valid']))
             if 'kinematics_candidate_valid' in row:candidates.append(float(row['kinematics_candidate_valid']))
             if bool(row.get('kinematics_ok',False)):accepted_angles.extend(row['com_opening_angles_deg'])
             flags={'fitting':'fit_ok','refitting':'refit_ok','vertex':'vertex_valid','association':'si_association_unique',
@@ -150,6 +162,7 @@ def run_stage(stage,input_root,output_root,config):
                  'elapsed_seconds':time.monotonic()-started,'physics_accuracy_evaluated':0.}
         if ambiguous:summary['finding_ambiguous_event_fraction']=float(np.mean(ambiguous))
         if candidates:summary['kinematics_candidate_event_fraction']=float(np.mean(candidates))
+        if projected_vertex:summary['projected_vertex_valid_fraction']=float(np.mean(projected_vertex))
         writer.metrics(summary)
         if conservation:writer.histogram('charge_conservation_error_adc',conservation)
         if dca:writer.histogram('common_dca_mm',dca)

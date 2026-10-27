@@ -14,7 +14,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage',default='inspect',choices=['inspect','ingest','prepare','spacepoints',
         'finding','fitting','refitting','vertex','association','material_request','material_import',
-        'energy','kinematics','all','truth','export_paths','evaluate'])
+        'energy','kinematics','all','truth','export_paths','evaluate','angular_benchmark'])
     parser.add_argument('--config',default=str(Path(__file__).with_name('config.json')))
     parser.add_argument('--input',dest='input_root')
     parser.add_argument('--output',dest='output_root')
@@ -36,6 +36,8 @@ def main(argv=None):
     legacy=config.get('fitting',{}).get('legacy_sequence',{})
     if legacy.get('checkpoint'):legacy['checkpoint']=resolve(legacy['checkpoint'])
     if isinstance(config.get('si_geometry'),str):config['si_geometry']=resolve(config['si_geometry'])
+    for group in ('evaluation','angular_benchmark'):
+        if config.get(group,{}).get('truth_root'):config[group]['truth_root']=resolve(config[group]['truth_root'])
     from reconstruction.raw_source import inspect
     from reconstruction.workflow import ingest,run_stage,run_all
     from reconstruction.stage_io import jsonable
@@ -52,10 +54,23 @@ def main(argv=None):
         from reconstruction.physics_stages import write_material_requests
         result=write_material_requests(args.input_root,args.output_root,config)
     elif args.stage=='evaluate':
-        if not args.input_root or not args.truth_root or not args.output_root:
+        truth_path=args.truth_root or config.get('evaluation',{}).get('truth_root')
+        if not args.input_root or not truth_path or not args.output_root:
             parser.error('--input observations.root --truth-root truth.root --output evaluation.root are required')
         from reconstruction.evaluation import evaluate_stage
-        result=evaluate_stage(args.input_root,args.truth_root,args.output_root,config=config.get('evaluation'))
+        result=evaluate_stage(args.input_root,truth_path,args.output_root,config=config.get('evaluation'))
+    elif args.stage=='angular_benchmark':
+        settings=dict(config.get('angular_benchmark',{}))
+        truth_path=args.truth_root or settings.pop('truth_root',None)
+        methods=settings.pop('methods',None)
+        if not truth_path or not methods or not args.output_root:
+            parser.error('angular_benchmark requires config methods, truth_root and --output new_benchmark.root')
+        methods={name:({phase:resolve(path) for phase,path in value.items()} if isinstance(value,dict) else resolve(value))
+                 for name,value in methods.items()}
+        from reconstruction.angular_benchmark import benchmark
+        output=Path(args.output_root).expanduser()
+        result=benchmark(methods,truth_path,output,str(output.with_suffix('.json')),settings,
+                         figure_base=str(output.with_suffix('')) if settings.get('plot',True) else None)
     elif args.stage=='truth':
         if not args.output_root:parser.error('--output is required')
         if config.get('entries') is None:parser.error('Truth export requires an explicit bounded entries list')

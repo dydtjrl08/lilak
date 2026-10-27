@@ -51,6 +51,10 @@ int C12_view_reconstruction(const char* inputRoot, Long64_t eventRow=0,
     auto* valid=leaf("fit_valid_layer");
     auto* vertex=leaf("vertex_uvw_mm");
     auto* vertexOK=leaf("vertex_valid");
+    auto* joint=leaf("vertex_joint_paths_uvw_mm");
+    auto* freePath=leaf("vertex_free_paths_uvw_mm");
+    auto* projectedVertex=leaf("vertex_projected_uv_mm");
+    auto* projectedOK=leaf("vertex_projected_valid");
     auto* entry=leaf("entry");
     const Long64_t identity=entry ? Long64_t(entry->GetValue()) : eventRow;
     const int colors[]={kBlue+1,kRed+1,kGreen+2,kMagenta+1,kOrange+1};
@@ -74,10 +78,43 @@ int C12_view_reconstruction(const char* inputRoot, Long64_t eventRow=0,
     overview->cd(1);gPad->SetRightMargin(.16);map->SetStats(false);map->Draw("COLZ");
     for (int projection=0;projection<2;++projection) {
         overview->cd(projection+2);
-        const double low=projection ? -20. : -50.;
-        const double high=projection ? 200. : 50.;
-        auto* frame=gPad->DrawFrame(-100.,low,210.,high,
+        double low=projection ? -20. : -50.,high=projection ? 200. : 50.;
+        double vlow=-50.,vhigh=210.;
+        if (vertex && vertexOK && vertexOK->GetValue()) {
+            vlow=std::min(vlow,vertex->GetValue(1)-20.);vhigh=std::max(vhigh,vertex->GetValue(1)+20.);
+            const double x=vertex->GetValue(projection ? 2 : 0);
+            low=std::min(low,x-15.);high=std::max(high,x+15.);
+        } else if (!projection && projectedVertex && projectedOK && projectedOK->GetValue()) {
+            vlow=std::min(vlow,projectedVertex->GetValue(1)-20.);vhigh=std::max(vhigh,projectedVertex->GetValue(1)+20.);
+            low=std::min(low,projectedVertex->GetValue(0)-15.);high=std::max(high,projectedVertex->GetValue(0)+15.);
+        }
+        auto* frame=gPad->DrawFrame(vlow,low,vhigh,high,
             projection ? "Fitted paths;v [mm];w [mm]" : "Fitted paths;v [mm];u [mm]");
+        if (freePath) for (int a=0;a<k;++a) {
+            auto* line=new TGraph();
+            for(int l=0;l<12;++l){
+                const int index=(a*12+l)*3;
+                const double v=freePath->GetValue(index+1),x=freePath->GetValue(index+(projection?2:0));
+                if(std::isfinite(v)&&std::isfinite(x))line->SetPoint(line->GetN(),v,x);
+            }
+            line->SetLineColor(colors[a%5]);line->SetLineStyle(2);line->SetLineWidth(2);
+            if(line->GetN())line->Draw("L SAME");else delete line;
+        }
+        if(joint && projectedOK && projectedOK->GetValue()) {
+            for(int a=0;a<k;++a){
+                auto* line=new TGraph();
+                for(int l=0;l<12;++l){
+                    const int index=(a*12+l)*3;
+                    const double v=joint->GetValue(index+1),x=joint->GetValue(index+(projection?2:0));
+                    if(std::isfinite(v)&&std::isfinite(x))line->SetPoint(line->GetN(),v,x);
+                }
+                line->SetLineColor(colors[a%5]);line->SetMarkerColor(colors[a%5]);line->SetMarkerStyle(20);line->SetLineWidth(2);
+                if(line->GetN())line->Draw("LP SAME");else delete line;
+            }
+            auto* text=new TLatex();text->SetNDC();text->SetTextSize(.035);
+            text->DrawLatex(.12,.88,"Dashed: free fit; solid: common-vertex fit");
+            if(projection && !(vertexOK && vertexOK->GetValue()))text->DrawLatex(.12,.80,"Projected study: no calibrated physical w");
+        }
         if (fit && valid) for (int a=0;a<k;++a) {
             auto* line=new TGraph();
             for (int l=0;l<12;++l) if (valid->GetValue(a*12+l)) {
@@ -86,11 +123,15 @@ int C12_view_reconstruction(const char* inputRoot, Long64_t eventRow=0,
                 if (std::isfinite(v) && std::isfinite(x)) line->SetPoint(line->GetN(),v,x);
             }
             line->SetLineColor(colors[a%5]);line->SetMarkerColor(colors[a%5]);
-            line->SetMarkerStyle(20);line->SetLineWidth(2);line->Draw("LP SAME");
+            line->SetMarkerStyle(20);line->SetLineWidth(2);
+            if(line->GetN())line->Draw("LP SAME");else delete line;
         }
         if (vertex && vertexOK && vertexOK->GetValue()) {
             auto* point=new TGraph(1);
             point->SetPoint(0,vertex->GetValue(1),vertex->GetValue(projection ? 2 : 0));
+            point->SetMarkerStyle(29);point->SetMarkerSize(2);point->Draw("P SAME");
+        } else if (!projection && projectedVertex && projectedOK && projectedOK->GetValue()) {
+            auto* point=new TGraph(1);point->SetPoint(0,projectedVertex->GetValue(1),projectedVertex->GetValue(0));
             point->SetMarkerStyle(29);point->SetMarkerSize(2);point->Draw("P SAME");
         }
         if (!fit) {auto* text=new TLatex();text->SetNDC();text->SetTextSize(.04);text->DrawLatex(.17,.85,"No fitted trajectory in this stage");}
