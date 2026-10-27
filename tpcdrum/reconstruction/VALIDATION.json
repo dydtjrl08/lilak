@@ -2,11 +2,13 @@
   "date": "2026-10-27",
   "objective_complete": false,
   "software_checks": {
-    "tests": 169,
-    "passed": 169,
+    "tests": 194,
+    "passed": 194,
     "skipped": 0,
     "native_root_crosscheck": true,
-    "log": "tmp/reconstruction_seqvertex_final_checks.log"
+    "log": "tmp/reconstruction_timing_acceptance_checks.log",
+    "additional_native_log": "tmp/reconstruction_native_parameter_checks.log",
+    "suite_scope": "192 full-suite checks plus 2 newly added native metadata tests, all on frozen source; Python3.8 syntax only, not runtime"
   },
   "local_environment": {
     "python": "3.12.14",
@@ -32,7 +34,9 @@
     "si_edep_present": false,
     "actual_two_path_stage_ROOT_smoke": true,
     "missing_calibration_propagation_verified": true,
-    "whole_dataset_end_to_end_validation": false
+    "whole_dataset_end_to_end_validation": false,
+    "stored_parameter_container_decoded_without_LILAK": true,
+    "actual_transport_assets_available": false
   },
   "training": "references/actual_pilot_20261027.json",
   "pending": [
@@ -53,5 +57,12 @@
     "method_accepted_pairs_all_methods": 0,
     "source": "references/sequential_vertex_pilot_20261027.json",
     "definition": "Conditional charge-attribution recovery, projected initial-truth angle errors; not physical detector precision"
+  },
+  "timing_evidence": "Metadata audit retained locally; generic collector guide in calibration/README_timing_audit.txt",
+  "strict_acceptance": {
+    "finite_candidate_does_not_imply_accepted": true,
+    "unknown_ambiguous_or_malformed_finding_is_not_accepted": true,
+    "stage_ROOT_counts_histograms_and_MC_residuals_share_strict_flag": true,
+    "acceptance_declaration_is_not_calibrated_physics_certainty": true
   }
 }

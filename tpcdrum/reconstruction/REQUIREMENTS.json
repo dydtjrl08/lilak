@@ -6,7 +6,7 @@
       "id": "R01",
       "requirement": "Inspect current actual digitization data and calibration availability",
       "state": "existing_inputs_inspected_new_dde_missing",
-      "evidence": "Actual 44211-event old 3C3 schema inspected; no observed Si energy. 3C2 first10 Si branch/name format verified. New equal-energy DDE digi not yet produced."
+      "evidence": "Existing digitization and small Si-energy branch samples inspected. Saved metadata decoded dictionary-free; actual settings/UUIDs/hashes retained locally. External transport/response assets and new DDE input remain unavailable."
     },
     {
       "id": "R02",
@@ -66,19 +66,19 @@
       "id": "R11",
       "requirement": "Per-stage ROOT algorithm performance and failure/coverage diagnostics",
       "state": "software_performance_and_failure_coverage_verified",
-      "evidence": "Independent mass/energy/vertex/angle residuals plus fixed-cohort angular benchmark, before/after common-valid comparisons and confidence-vs-conditional recovery separation. Actual new-DDE precision pending."
+      "evidence": "Independent mass/energy/vertex/angle residuals plus fixed-cohort angular benchmark, before/after common-valid comparisons and confidence-vs-conditional recovery separation. Actual new-DDE precision pending. Candidate and strict accepted kinematics stay separate through ROOT handoff, aggregate counts, COM histograms and MC residuals; missing/malformed/ambiguous finding never accepted."
     },
     {
       "id": "R12",
       "requirement": "Missing Kalman/calibration information export and transfer commands",
       "state": "commands_implemented_server_export_pending",
-      "evidence": "Stdlib collector and actual Geant4 material/geometry/path exporter; commands and scp-P5522 in calibration README. No gas/GEM modifications."
+      "evidence": "Stdlib collector and actual Geant4 material/geometry/path exporter; commands and scp-P5522 in calibration README. No gas/GEM modifications. Current configuration, saved ROOT asset references, and same-name unverified candidates collected separately; native metadata comment/cycle semantics and failure continuity checked. Exact commands in README_timing_audit.txt."
     },
     {
       "id": "R13",
       "requirement": "GitHub delivery without pull or overwriting existing server files",
       "state": "published_additions_only_delivery",
-      "evidence": "Draft PR3 codex/staged-tpc-reconstruction; previous source-only release 9f6a79a verified71 additions0 existing-file modifications/deletions. Installer preserves/refuses existing paths. Sequential/joint follow-up release uses the same isolated branch."
+      "evidence": "Draft PR3 codex/staged-tpc-reconstruction; source-only follow-up to92bba270a. Safe new-clone delivery and exclusive installer preserve existing server files. Exact final commit/tree/checksums in external delivery receipt."
     },
     {
       "id": "R14",
@@ -106,5 +106,5 @@
       "evidence": "15 benchmark tests; same24 source groups,18eligible closestpairs, fixed P/R=.5 and2-visible-layer criterion. Conditional and method-accepted recovery separate; all methods abstained from unique physical-separation claims."
     }
   ],
-  "completion_rule": "All requirements need authoritative evidence; mathematical/synthetic tests cannot establish actual physics accuracy. Keep full objective active while any item is unverified."
+  "completion_rule": "All requirements need authoritative evidence; mathematical/synthetic tests cannot establish actual physics accuracy. Objective remains incomplete while required evidence is missing; execution can be blocked pending external inputs."
 }

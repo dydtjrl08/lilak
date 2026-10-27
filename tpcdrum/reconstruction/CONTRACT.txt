@@ -60,6 +60,26 @@ be exported with explicit commands, and stages must give inspectable missing-inp
 Truth for evaluation lives in a separate ROOT file/view, NEVER in inference arguments.
 Evaluation outputs are attached to stage ROOT under separate metrics/histogram objects.
 
+Kinematics acceptance:
+  Finite M/Ex/COM/Dalitz values are candidate calculations, not evidence that
+  overlapping tracks were uniquely separated. New kinematics_ok and
+  kinematics_method_accepted both require an explicit valid, non-ambiguous
+  finding declaration in addition to resolved energies and an accepted direction
+  reference. Missing, malformed or conflicting finding confidence never counts
+  as final method acceptance. Refit/vertex changes invalidate old acceptance.
+  Assessment is a method declaration, NOT a calibrated probability or an
+  independently established detector-accuracy claim. Legacy ROOT candidates
+  without assessment evidence stay candidates in current success metrics.
+
+Stored timing settings:
+  A metadata value and an external filename prove neither the response bytes
+  used by a historical binary nor the effective time-to-position relationship.
+  read_stored_parameters.py reads only bounded top-level metadata, preserving
+  cycles/order/duplicates and hashing the key payload; it never enables drift
+  calibration. Actual input metadata must be inspected locally;
+  pulse-centroid offset, field/drift response and historical asset identity are
+  still unverified. See calibration/README_timing_audit.txt for collection.
+
 Shared ownership during implementation:
   root: stage_io, raw ingestion, preprocessing, space points, workflow, CLI/macros,
         config, audit/requirements, integration, non-overwriting delivery, GitHub.

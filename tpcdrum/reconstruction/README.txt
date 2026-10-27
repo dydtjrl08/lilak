@@ -115,6 +115,10 @@ Si, 물질 경로, 에너지
   120도나 에너지 등분배를 재구성 결과에 강제하지 않는다.
   첫 관측점 방향을 vertex 방향과 같다고 할 경우 config에서 그 근사를 명시해야 한다.
   기본값은 candidate만 계산하며 initial direction 복원 성공으로 세지 않는다.
+  분리 결과가 ambiguous이거나 그 판정이 누락/손상되면, 유한한 질량·각도 값은
+  candidate로만 보존한다. kinematics_ok와 kinematics_method_accepted는 모두
+  명시적으로 유효한 비모호 finding 및 에너지·방향 조건이 있어야 1이 된다.
+  이 판정 자체가 물리적 정확도나 확률 보정 완료를 뜻하지는 않는다.
   전파할 9x9 full joint covariance를 명시한 경우에만 운동학 오차를 계산한다.
 
   평가 정답은 별도의 truth.root다. inference 입력으로 사용할 수 없다.
@@ -132,3 +136,12 @@ Si, 물질 경로, 에너지
   새 DDE digi, 실제 timing·PRF·Si 보정과 native geometry export가 오면 같은 분할에서
   궤적·vertex·질량·COM 상관각 및 불확실도/coverage를 끝까지 다시 검증해야 한다.
   자세한 알고리즘 근거는 references/, 구현 검사는 checks/에 있다.
+
+저장된 시간 설정 확인
+  calibration/read_stored_parameters.py는 실제 digi의 top-level parameter
+  container만 읽고 원문/평가값/중복/metadata key 해시를 저장한다. 파형이나 MC event는
+  읽지 않는다. 실제 저장 설정의 감사 결과는 로컬 자료로 별도 보관한다.
+  이 수치만으로 charge-mean 시간의 절대 z 보정이 검증되었다고 처리하지 않는다.
+  pulse template 평균시간, field-dependent drift와 당시 asset 파일 내용이 더 필요하다.
+  현재 설정과 당시 저장된 참조를 구분해 모으는 명령은
+  calibration/README_timing_audit.txt에 있다. 가스/GEM gain은 변경하지 않는다.

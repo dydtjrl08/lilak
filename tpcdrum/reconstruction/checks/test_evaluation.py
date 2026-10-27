@@ -102,7 +102,7 @@ if __name__=='__main__':unittest.main()
 class EvaluationPhysicsTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.d=Path(self.tmp.name)
-    def fixture(self,accepted=True,corrupt_reported=False,direct_reference_four=False):
+    def fixture(self,accepted=True,corrupt_reported=False,direct_reference_four=False,method_assessed=True):
         from reconstruction.evaluation import _independent_threebody
         mass=4.;ground=12.
         p=np.array([[2.,0.,.3],[-.6,1.2,-.1],[-1.4,-1.2,-.2]])
@@ -128,6 +128,7 @@ class EvaluationPhysicsTests(unittest.TestCase):
             com_opening_angles_deg=computed['angles']+np.array([1.,0.,0.])*(1 if corrupt_reported else 0),
             com_pair_indices=np.array([[0,1],[0,2],[1,2]]),
             dalitz_xy=computed['dalitz']+(np.array([.01,-.02]) if corrupt_reported else 0.))
+        if method_assessed:arrays['kinematics_method_accepted']=np.int64(accepted)
         with StageWriter(self.d/'obs.root','kinematics',meta) as w:
             w.write(arrays,dict(fitting=dict(physical_3d=True),vertex=dict(candidate_vertex_mm=(vertex+delta).tolist())))
         refs=dict(key,truth_components=c,truth_background=np.zeros_like(q),truth_vertex_uvw_mm=vertex,
@@ -163,6 +164,17 @@ class EvaluationPhysicsTests(unittest.TestCase):
         self.assertTrue(np.isfinite(a['vertex_candidate_error_norm_mm']))
         self.assertTrue(np.isnan(a['kinetic_energy_error_mev']).all())
         np.testing.assert_allclose(a['kinetic_energy_candidate_error_mev'],0.,atol=1e-12)
+
+    def test_legacy_ok_without_explicit_method_acceptance_remains_candidate_only(self):
+        self.fixture(accepted=True,method_assessed=False);r=self.run_eval()
+        a,d=next(read_stage(self.d/'eval.root',allow_truth=True))
+        self.assertEqual(r['summary']['kinematics_accepted_events'],0)
+        self.assertEqual(r['summary']['kinematics_candidate_events'],1)
+        self.assertFalse(a['kinematics_accepted_error_valid'])
+        self.assertTrue(np.isnan(a['invariant_mass_error_mev']))
+        self.assertTrue(np.isnan(a['com_pair_angle_error_deg']).all())
+        self.assertAlmostEqual(float(a['candidate_invariant_mass_error_mev']),0.,places=11)
+        np.testing.assert_allclose(a['candidate_com_pair_angle_error_deg'],0.,atol=1e-10)
     def test_missing_masses_never_silently_use_an_assumed_alpha_mass(self):
         self.fixture();r=self.run_eval(masses=False)
         a,d=next(read_stage(self.d/'eval.root',allow_truth=True))

@@ -60,6 +60,9 @@ class RefitStageTests(unittest.TestCase):
 
     def test_any_success_invalidates_all_downstream_physics_and_snapshots_old(self):
         self.record['kinematics_candidate_valid']=np.int64(1)
+        self.record['kinematics_method_accepted']=np.int64(1)
+        self.record['kinematics_finding_assessment_available']=np.int64(1)
+        self.record['kinematics_finding_ambiguous']=np.int64(0)
         self.record['kinematics_covariance_propagated']=np.int64(1)
         self.record['vertex_direction_valid']=np.ones(3,dtype=np.uint8)
         self.record['track_vertex_directions_uvw']=np.tile([0.,1.,0.],(3,1))
@@ -68,8 +71,10 @@ class RefitStageTests(unittest.TestCase):
         self.assertEqual(updates['refit_revision'], 1)
         for flag in ('vertex_valid', 'si_association_unique', 'si_association_geometry_unique',
                      'material_request_valid', 'material_paths_embedded_valid', 'kinematics_ok',
-                     'kinematics_candidate_valid','kinematics_covariance_propagated'):
+                     'kinematics_candidate_valid','kinematics_covariance_propagated',
+                     'kinematics_method_accepted','kinematics_finding_assessment_available'):
             self.assertFalse(updates[flag], flag)
+        self.assertEqual(updates['kinematics_finding_ambiguous'],-1)
         self.assertFalse(updates['energy_ok'].any())
         self.assertFalse(updates['vertex_direction_valid'].any())
         self.assertTrue(np.isnan(updates['track_vertex_directions_uvw']).all())

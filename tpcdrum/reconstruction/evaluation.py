@@ -273,13 +273,13 @@ def _physics_errors(row,diagnostic,reference,matching,cfg,truth_meta):
             candidate_invariant_mass_error_mev=np.float64(reported_mass-ref['mass']),
             candidate_excitation_error_mev=np.float64(reported_ex-ref['excitation']),
             candidate_com_pair_angle_error_deg=angles-ref['angles'],candidate_dalitz_error_xy=dalitz-ref['dalitz'])
-        if bool(row.get('kinematics_ok',False)):
+        if bool(row.get('kinematics_method_accepted',False)):
             values.update(kinematics_accepted_error_valid=np.int64(1),
                 invariant_mass_error_mev=values['candidate_invariant_mass_error_mev'],
                 excitation_error_mev=values['candidate_excitation_error_mev'],
                 com_pair_angle_error_deg=values['candidate_com_pair_angle_error_deg'].copy(),dalitz_error_xy=values['candidate_dalitz_error_xy'].copy())
-            notes['kinematics_status']='accepted_direction_model_compared_to_MC_initial_four_vectors'
-        else:notes['kinematics_status']='candidate_only_direction_model_not_accepted'
+            notes['kinematics_status']='accepted_method_compared_to_MC_initial_four_vectors'
+        else:notes['kinematics_status']='candidate_only_method_not_explicitly_accepted'
     except (ValueError,TypeError,KeyError,IndexError) as error:
         notes.update(kinematics_status='invalid_reference_or_stage_kinematics',message=str(error))
     return values,notes

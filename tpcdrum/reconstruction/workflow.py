@@ -138,7 +138,7 @@ def run_stage(stage,input_root,output_root,config):
     metadata={k:v for k,v in parent.items() if k not in ('numeric_fields','events','complete','stage')}
     metadata.update(config=config,parent_root=str(Path(input_root).resolve()),parent_sha256=sha256(input_root),
                     stage=stage,role='observations',physics_accuracy_evaluated=False)
-    success=[];conservation=[];angles=[];masses=[];dca=[];ambiguous=[];candidates=[];accepted_angles=[];projected_vertex=[]
+    success=[];conservation=[];angles=[];masses=[];dca=[];ambiguous=[];candidates=[];accepted_angles=[];projected_vertex=[];direction_compatible=[]
     started=time.monotonic()
     with StageWriter(output_root,stage,metadata) as writer:
         for i,(record,diagnostic) in enumerate(read_stage(input_root)):
@@ -152,24 +152,45 @@ def run_stage(stage,input_root,output_root,config):
             if 'finding_ambiguous' in row:ambiguous.append(float(row['finding_ambiguous']))
             if 'vertex_projected_valid' in row:projected_vertex.append(float(row['vertex_projected_valid']))
             if 'kinematics_candidate_valid' in row:candidates.append(float(row['kinematics_candidate_valid']))
-            if bool(row.get('kinematics_ok',False)):accepted_angles.extend(row['com_opening_angles_deg'])
+            if 'kinematics_direction_model_compatible' in row:
+                direction_compatible.append(float(row['kinematics_direction_model_compatible']))
+            if bool(row.get('kinematics_method_accepted',False)):accepted_angles.extend(row['com_opening_angles_deg'])
             flags={'fitting':'fit_ok','refitting':'refit_ok','vertex':'vertex_valid','association':'si_association_unique',
                    'material_request':'material_request_valid','material_import':'material_paths_embedded_valid',
-                   'energy':'energy_ok','kinematics':'kinematics_ok'}
+                   'energy':'energy_ok','kinematics':'kinematics_method_accepted'}
             success.append(float(np.all(row[flags[stage]])) if stage in flags else 1.)
             print(stage,'event',i+1,'entry',int(row['entry']),'stage_output_valid',bool(success[-1]),flush=True)
         summary={'events':len(success),'stage_output_valid_fraction':float(np.mean(success)),
                  'elapsed_seconds':time.monotonic()-started,'physics_accuracy_evaluated':0.}
         if ambiguous:summary['finding_ambiguous_event_fraction']=float(np.mean(ambiguous))
         if candidates:summary['kinematics_candidate_event_fraction']=float(np.mean(candidates))
+        if direction_compatible:summary['kinematics_direction_model_compatible_fraction']=float(np.mean(direction_compatible))
         if projected_vertex:summary['projected_vertex_valid_fraction']=float(np.mean(projected_vertex))
         writer.metrics(summary)
         if conservation:writer.histogram('charge_conservation_error_adc',conservation)
         if dca:writer.histogram('common_dca_mm',dca)
         if angles:writer.histogram('candidate_com_opening_angle_deg',angles,bins=180,range=(0.,180.))
         if masses:writer.histogram('candidate_excitation_mev',masses,bins=120,range=(0.,15.))
-        if accepted_angles:writer.histogram('accepted_direction_model_com_angle_deg',accepted_angles,bins=180,range=(0.,180.))
+        if accepted_angles:writer.histogram('accepted_method_com_angle_deg',accepted_angles,bins=180,range=(0.,180.))
     return Path(output_root)
+
+
+def _kinematics_counts(input_root):
+    """Count final candidates and explicit method acceptance from saved rows.
+
+    Old kinematics_ok-only files remain inspectable candidates. Their missing
+    finding acceptance declaration must not become a successful physical event.
+    """
+    events=0;accepted=0;candidates=0;direction_compatible=0
+    for arrays,_ in read_stage(input_root):
+        events+=1
+        accepted+=int(bool(arrays.get('kinematics_method_accepted',False)))
+        candidates+=int(bool(arrays.get('kinematics_candidate_valid',arrays.get('kinematics_ok',False))))
+        direction_compatible+=int(bool(arrays.get('kinematics_direction_model_compatible',False)))
+    return dict(events=events,valid_kinematics=accepted,accepted_events=accepted,
+                candidate_kinematics_events=candidates,
+                direction_model_compatible_events=direction_compatible,
+                all_events_have_physical_result=events>0 and accepted==events)
 
 
 def run_all(config,output_dir):
@@ -201,12 +222,8 @@ def run_all(config,output_dir):
                         # The original CSV is bound to the OLD path. Never reuse it
                         # as if a changed trajectory had been traced again.
                         config.setdefault('energy',{})['material_paths_validated']=False
-    events=0;count=0
-    for arrays,_ in read_stage(previous):
-        events+=1;count+=int(bool(arrays.get('kinematics_ok',False)))
-    result={'outputs':outputs,'events':events,'valid_kinematics':count,
-            'all_events_have_physical_result':events>0 and count==events,'physics_accuracy_evaluated':False,
-            'truth_was_an_inference_input':False}
+    result=dict(_kinematics_counts(previous),outputs=outputs,physics_accuracy_evaluated=False,
+                truth_was_an_inference_input=False)
     (out/'run_summary.json').write_text(json.dumps(jsonable(result),indent=2)+'\n')
     return result
 

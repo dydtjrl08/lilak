@@ -46,6 +46,7 @@ class KinematicsStageTests(unittest.TestCase):
 
     def test_first_observed_approximation_requires_acknowledgement(self):
         record, diag, _ = fixture()
+        record['finding_ambiguous']=np.int64(0)
         cfg = dict(kinematics=dict(acknowledge_first_point_direction_as_vertex_approximation=True))
         values, diag = kinematics_event(record, diag, cfg)
         self.assertTrue(values['kinematics_ok'])
@@ -53,6 +54,65 @@ class KinematicsStageTests(unittest.TestCase):
         self.assertTrue(values['kinematics_first_tangent_approximation_acknowledged'])
         self.assertFalse(values['kinematics_vertex_direction_provenance_valid'])
         self.assertFalse(values['kinematics_physics_accuracy_validated'])
+
+    def test_explicit_ambiguous_finding_rejects_acceptance_without_changing_candidate_observables(self):
+        record,diag,_=fixture()
+        cfg=dict(kinematics=dict(acknowledge_first_point_direction_as_vertex_approximation=True))
+        baseline,_=kinematics_event(record,diag,cfg)
+        record['finding_ambiguous']=np.int64(1)
+        rejected,notes=kinematics_event(record,diag,cfg)
+        self.assertTrue(rejected['kinematics_candidate_valid'])
+        self.assertFalse(rejected['kinematics_ok']);self.assertFalse(rejected['kinematics_method_accepted'])
+        self.assertTrue(rejected['kinematics_finding_assessment_available'])
+        self.assertEqual(rejected['kinematics_finding_ambiguous'],1)
+        self.assertEqual(notes['kinematics']['status'],'candidate_only_ambiguous_finding')
+        for key in ('alpha_four_vectors_mev','com_four_vectors_mev','invariant_mass_mev','excitation_mev',
+                    'com_opening_angles_deg','dalitz_xy'):
+            np.testing.assert_array_equal(rejected[key],baseline[key])
+
+    def test_unknown_finding_preserves_candidates_but_never_acceptance(self):
+        record,diag,_=fixture()
+        cfg=dict(kinematics=dict(acknowledge_first_point_direction_as_vertex_approximation=True))
+        unknown,notes=kinematics_event(record,diag,cfg)
+        self.assertFalse(unknown['kinematics_ok']);self.assertTrue(unknown['kinematics_candidate_valid'])
+        self.assertTrue(unknown['kinematics_direction_model_compatible'])
+        self.assertFalse(unknown['kinematics_method_accepted'])
+        self.assertFalse(unknown['kinematics_finding_assessment_available'])
+        self.assertEqual(unknown['kinematics_finding_ambiguous'],-1)
+        self.assertEqual(notes['kinematics']['finding_assessment']['status'],'unknown_not_assessed')
+        self.assertEqual(notes['kinematics']['status'],'candidate_only_finding_not_assessed')
+        record['finding_ambiguous']=np.int64(0)
+        accepted,_=kinematics_event(record,diag,cfg)
+        self.assertTrue(accepted['kinematics_ok']);self.assertTrue(accepted['kinematics_method_accepted'])
+        self.assertTrue(accepted['kinematics_finding_assessment_available'])
+        self.assertEqual(accepted['kinematics_finding_ambiguous'],0)
+
+    def test_malformed_conflicting_declarations_never_accept_valid_zero(self):
+        cfg=dict(kinematics=dict(acknowledge_first_point_direction_as_vertex_approximation=True))
+        for invalid in (np.nan,2.,np.array([0]),np.array([0,1])):
+            with self.subTest(invalid=repr(invalid)):
+                record,diag,_=fixture()
+                record['finding_ambiguous']=invalid;diag['finding']=dict(ambiguous=False)
+                values,notes=kinematics_event(record,diag,cfg)
+                self.assertTrue(values['kinematics_candidate_valid'])
+                self.assertTrue(values['kinematics_direction_model_compatible'])
+                self.assertFalse(values['kinematics_ok']);self.assertFalse(values['kinematics_method_accepted'])
+                self.assertFalse(values['kinematics_finding_assessment_available'])
+                self.assertEqual(values['kinematics_finding_ambiguous'],-1)
+                self.assertEqual(notes['kinematics']['finding_assessment']['invalid_declarations'],['finding_ambiguous branch'])
+                self.assertEqual(notes['kinematics']['finding_assessment']['valid_declarations'],
+                                 [dict(source='finding diagnostic',ambiguous=False)])
+
+    def test_diagnostic_ambiguity_and_conflicting_declarations_reject_acceptance(self):
+        record,diag,_=fixture()
+        record['finding_ambiguous']=np.int64(0);diag['finding']=dict(ambiguous=True)
+        cfg=dict(kinematics=dict(acknowledge_first_point_direction_as_vertex_approximation=True))
+        values,notes=kinematics_event(record,diag,cfg)
+        self.assertTrue(values['kinematics_candidate_valid']);self.assertFalse(values['kinematics_ok'])
+        self.assertTrue(notes['kinematics']['finding_assessment']['disagreement'])
+        del record['finding_ambiguous']
+        fallback,_=kinematics_event(record,diag,cfg)
+        self.assertTrue(fallback['kinematics_finding_assessment_available']);self.assertFalse(fallback['kinematics_ok'])
 
     def test_vertex_reference_cannot_relabel_first_observed_tangent(self):
         record, diag, _ = fixture()
@@ -63,6 +123,7 @@ class KinematicsStageTests(unittest.TestCase):
         record.update(track_vertex_directions_uvw=record['track_directions_uvw'],
                       vertex_direction_valid=np.ones(3, np.uint8))
         diag['vertex_direction'] = dict(source='explicit synthetic observation-only back-transport fixture', observation_only=True)
+        record['finding_ambiguous']=np.int64(0)
         values, passed = kinematics_event(record, diag, cfg)
         self.assertTrue(values['kinematics_ok'])
         self.assertTrue(values['kinematics_vertex_direction_provenance_valid'])

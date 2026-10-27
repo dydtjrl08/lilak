@@ -51,12 +51,20 @@ class JointVertexStageTests(unittest.TestCase):
 
     def test_physical_joint_fit_invalidates_old_energy_and_keeps_original_measurements(self):
         row,diag,cfg,expected=scene(3,3)
+        row.update(kinematics_method_accepted=np.int64(1),
+                   kinematics_candidate_valid=np.int64(1),
+                   kinematics_finding_assessment_available=np.int64(1),
+                   kinematics_finding_ambiguous=np.int64(0))
         result,d=vertex_event(row,diag,cfg)
         self.assertEqual(d['vertex']['status'],'ok',d['vertex'])
         self.assertTrue(result['vertex_valid'])
         np.testing.assert_allclose(result['vertex_uvw_mm'],expected,atol=1e-4)
         self.assertFalse(result['energy_ok'].any())
         self.assertFalse(result['material_paths_embedded_valid'])
+        self.assertFalse(result['kinematics_method_accepted'])
+        self.assertFalse(result['kinematics_candidate_valid'])
+        self.assertFalse(result['kinematics_finding_assessment_available'])
+        self.assertEqual(result['kinematics_finding_ambiguous'],-1)
         self.assertTrue(np.isnan(result['fit_covariances']).all())
         self.assertTrue(result['vertex_direction_valid'].all())
         np.testing.assert_array_equal(result['pre_vertex_track_vertex_energy_mev'],[10.,10.,10.])

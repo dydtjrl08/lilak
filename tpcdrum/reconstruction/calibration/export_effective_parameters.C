@@ -27,9 +27,11 @@ int export_effective_parameters(const char* input,const char* output)
         for(int i=0;i<parameters->GetEntriesFast();++i) {
             auto* parameter=dynamic_cast<LKParameter*>(parameters->At(i));if(!parameter)continue;
             if(!firstParameter)fprintf(stream,",");firstParameter=false;
-            fprintf(stream,"{\"name\":%s,\"value\":%s,\"raw\":%s,\"unit\":%s}",
+            fprintf(stream,"{\"name\":%s,\"value\":%s,\"raw\":%s,\"unit\":%s,\"type_flags\":%d,\"is_line_comment\":%s,\"is_comment_out\":%s}",
                     Quote(parameter->GetName()).Data(),Quote(parameter->GetValue()).Data(),
-                    Quote(parameter->GetRaw()).Data(),Quote(parameter->GetUnit()).Data());
+                    Quote(parameter->GetRaw()).Data(),Quote(parameter->GetUnit()).Data(),
+                    parameter->GetType(),parameter->IsLineComment()?"true":"false",
+                    parameter->IsCommentOut()?"true":"false");
         }
         fprintf(stream,"]}");
     }

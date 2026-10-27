@@ -28,6 +28,10 @@ def _encode(value):
 
 def _empty():
     return dict(kinematics_ok=np.int64(0), kinematics_candidate_valid=np.int64(0),
+                kinematics_method_accepted=np.int64(0),
+                kinematics_direction_model_compatible=np.int64(0),
+                kinematics_finding_assessment_available=np.int64(0),
+                kinematics_finding_ambiguous=np.int64(-1),
                 kinematics_physics_accuracy_validated=np.int64(0),
                 alpha_four_vectors_mev=np.full((3, 4), np.nan),
                 com_four_vectors_mev=np.full((3, 4), np.nan),
@@ -75,6 +79,39 @@ def _masses(record, config):
     raise ValueError('Missing explicit or embedded initialized-Geant4 alpha/C12 ground masses')
 
 
+def _finding_assessment(record, diagnostic):
+    """Read only explicit method declarations; never derive confidence from MC.
+
+    Acceptance requires valid scalar declarations and explicit non-ambiguity.
+    A conflicting ambiguous declaration wins; a malformed declaration prevents
+    a valid zero elsewhere from silently accepting the event.
+    """
+    declarations=[];invalid=[]
+    if 'finding_ambiguous' in record:
+        declarations.append(('finding_ambiguous branch',record['finding_ambiguous']))
+    finding=diagnostic.get('finding',{})
+    if isinstance(finding,dict) and 'ambiguous' in finding:
+        declarations.append(('finding diagnostic',finding['ambiguous']))
+    known=[]
+    for source,value in declarations:
+        array=np.asarray(value)
+        if array.ndim!=0 or array.dtype.kind not in 'biuf':
+            invalid.append(source);continue
+        flag=float(array.reshape(-1)[0])
+        if not np.isfinite(flag) or flag not in (0.,1.):
+            invalid.append(source);continue
+        known.append((source,int(flag)))
+    code=1 if any(flag==1 for _,flag in known) else 0 if known and not invalid else -1
+    return code,dict(available=code>=0,ambiguity_code=code,
+        status='ambiguous' if code==1 else 'explicit_not_ambiguous' if code==0 else
+               'invalid_declaration_not_assessed' if invalid else 'unknown_not_assessed',
+        sources=[name for name,_ in known],invalid_declarations=invalid,
+        valid_declarations=[dict(source=name,ambiguous=bool(flag)) for name,flag in known],
+        disagreement=bool(known and len({flag for _,flag in known})>1),
+        declaration_is_not_calibrated_physics_certainty=True,
+        missing_or_invalid_declaration_is_not_accepted=True)
+
+
 def _directions(record, diagnostic, cfg):
     reference = cfg.get('direction_reference', 'first_observed_plane')
     if reference == 'vertex':
@@ -111,11 +148,16 @@ def kinematics_event(record, diagnostic, config):
     Candidate observables can be inspected without accepting a direction model.
     """
     values = _empty()
+    finding_code,finding_assessment=_finding_assessment(record,diagnostic)
+    values.update(kinematics_finding_assessment_available=np.int64(finding_code>=0),
+                  kinematics_finding_ambiguous=np.int64(finding_code))
     result = dict(status='missing_physical_inputs', physics_accuracy_evaluated=False,
                   imposed_120_degree_constraint=False, imposed_equal_energy_constraint=False,
                   invariant_mass_is_not_excitation=True,
                   particle_hypothesis='three alpha particles; this handler does not perform PID',
-                  uncertainty_status='not_supplied', direction_reference=None)
+                  uncertainty_status='not_supplied', direction_reference=None,
+                  finding_assessment=finding_assessment,
+                  acceptance_scope='kinematics_ok and kinematics_method_accepted both require explicit valid non-ambiguous finding and a compatible direction reference; candidates remain independent')
     cfg = config.get('kinematics', {})
     try:
         energies = np.asarray(record.get('track_vertex_energy_mev'), dtype=float)
@@ -135,7 +177,9 @@ def kinematics_event(record, diagnostic, config):
         vectors = four_vectors(energies, directions, mass)
         computed = kinematics(vectors, ground)
         values.update(kinematics_candidate_valid=np.int64(computed['angles_valid']),
-                      kinematics_ok=np.int64(accepted and computed['angles_valid']),
+                      kinematics_ok=np.int64(accepted and computed['angles_valid'] and finding_code==0),
+                      kinematics_method_accepted=np.int64(accepted and computed['angles_valid'] and finding_code==0),
+                      kinematics_direction_model_compatible=np.int64(accepted and computed['angles_valid']),
                       alpha_four_vectors_mev=vectors, com_four_vectors_mev=computed['com_four_vectors'],
                       parent_four_vector_mev=computed['parent_four_vector'], parent_beta=computed['parent_beta'],
                       invariant_mass_mev=np.float64(computed['invariant_mass_mev']),
@@ -146,7 +190,9 @@ def kinematics_event(record, diagnostic, config):
                       com_energy_fractions=computed['com_energy_fractions'], dalitz_xy=computed['dalitz_xy'],
                       com_momentum_residual_mev=np.float64(computed['com_momentum_residual_mev']),
                       com_energy_closure_mev=np.float64(computed['com_energy_closure_mev']))
-        result.update(status=('ok_with_explicit_direction_reference' if accepted else
+        result.update(status=('candidate_only_ambiguous_finding' if accepted and finding_code==1 else
+                              'candidate_only_finding_not_assessed' if accepted and finding_code<0 else
+                              'ok_with_explicit_direction_reference' if accepted else
                               'candidate_only_direction_reference_unacknowledged')
                              if computed['angles_valid'] else 'undefined_COM_observable',
                       direction_reference=direction_info, mass_provenance=provenance,
