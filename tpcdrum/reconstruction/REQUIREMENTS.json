@@ -1,0 +1,92 @@
+{
+  "objective_status": "active",
+  "date": "2026-10-27",
+  "requirements": [
+    {
+      "id": "R01",
+      "requirement": "Inspect current actual digitization data and calibration availability",
+      "state": "existing_inputs_inspected_new_dde_missing",
+      "evidence": "Actual 44211-event old 3C3 schema inspected; no observed Si energy. 3C2 first10 Si branch/name format verified. New equal-energy DDE digi not yet produced."
+    },
+    {
+      "id": "R02",
+      "requirement": "Package under tpcdrum/reconstruction with runnable simulation macros",
+      "state": "implemented_pending_server_validation",
+      "evidence": "reconstruction/run.py + simulation ROOT launch/view macros + notebook; local native ROOT launch/view verified."
+    },
+    {
+      "id": "R03",
+      "requirement": "Self-contained per-stage ROOT files reloadable as downstream inputs",
+      "state": "software_handoff_verified",
+      "evidence": "TTree waveform/shape/metadata + all-stage handoff; earlier ROOT deleted in integration test; downstream imported material energy works after external CSV/JSON deletion."
+    },
+    {
+      "id": "R04",
+      "requirement": "Distinct space-point and direct-waveform reconstruction routes",
+      "state": "implemented_existing_data_smoke_verified",
+      "evidence": "Actual entries 0 and 5 run through both direct-waveform and explicit space-point paths; physical drift unavailable, correctly marked incomplete."
+    },
+    {
+      "id": "R05",
+      "requirement": "Hough, RANSAC and additional track-finding methods with comparison",
+      "state": "implemented_small_pilot_evaluated",
+      "evidence": "Frozen 7-test event comparison of CNN, Hough, RANSAC, TLS, CNN+Hough, waveform hypotheses. Not optimized or new-DDE validation."
+    },
+    {
+      "id": "R06",
+      "requirement": "Neighbor/layer-conditioned overlapping-waveform hypotheses and evidence tests",
+      "state": "implemented_physical_response_validation_pending",
+      "evidence": "Whole-pad heldout prediction, per-hypothesis residual/conditioning/identifiability tests; model mismatch and exact overlap retain ambiguity."
+    },
+    {
+      "id": "R07",
+      "requirement": "Advanced CNN model, training and held-out actual-data evaluation",
+      "state": "small_actual_pilot_trained_production_pending",
+      "evidence": "48 old 3C3 events; source-group34/7/7; width8 5epochs; frozen validation-best epoch3; CNN-only weaker than geometry. New-DDE training pending."
+    },
+    {
+      "id": "R08",
+      "requirement": "Advanced Kalman-family fitting/smoothing with justified material/noise inputs",
+      "state": "software_verified_material_calibration_pending",
+      "evidence": "4D linear RTS; energy-aware EKF/UKF RTS; robust DAF/Huber; first-point-energy refit; separate sequence-CNN bridge. Native calibrated performance not established."
+    },
+    {
+      "id": "R09",
+      "requirement": "Si track association and three-alpha vertex energy reconstruction through material dE/dx",
+      "state": "software_verified_native_validation_pending",
+      "evidence": "Per-name module association at last local tangent/Si front face; strict per-event navigator path import; no shared-Si equal splitting; actual native exporter server run pending."
+    },
+    {
+      "id": "R10",
+      "requirement": "Accurate reconstructed trajectories, invariant mass, COM opening angles validated independently",
+      "state": "pending_actual_physics_validation",
+      "evidence": "M/Ex/COM/Dalitz calculation implemented without120degree constraint; initial production direction not silently equated with first observed tangent. Precision requires new data/calibration."
+    },
+    {
+      "id": "R11",
+      "requirement": "Per-stage ROOT algorithm performance and failure/coverage diagnostics",
+      "state": "implemented_accuracy_extensions_in_validation",
+      "evidence": "Per-stage metrics, failures, ambiguity, evaluation-only ROOT and global alpha matching. Candidate validity is separated from accepted direction model."
+    },
+    {
+      "id": "R12",
+      "requirement": "Missing Kalman/calibration information export and transfer commands",
+      "state": "commands_implemented_server_export_pending",
+      "evidence": "Stdlib collector and actual Geant4 material/geometry/path exporter; commands and scp-P5522 in calibration README. No gas/GEM modifications."
+    },
+    {
+      "id": "R13",
+      "requirement": "GitHub delivery without pull or overwriting existing server files",
+      "state": "prepared_for_additions_only_github_delivery",
+      "evidence": "New folder and two new simulation macros; all-destination preflight, exclusive creation, existing-path/symlink preservation verified. Separate branch/PR publication next."
+    },
+    {
+      "id": "R14",
+      "requirement": "End-to-end test on user's new equal-energy DDE digi, uncertainty/closure and zero truth leakage",
+      "state": "pending_new_dde_input",
+      "known_fact": "New DDE digitization has not been produced yet",
+      "evidence": "User confirmed digitization has not yet been produced and will place files in simulation; no end-to-end DDE mass or angular-resolution claim."
+    }
+  ],
+  "completion_rule": "All requirements need authoritative evidence; mathematical/synthetic tests cannot establish actual physics accuracy. Keep full objective active while any item is unverified."
+}

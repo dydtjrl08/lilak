@@ -1,0 +1,33 @@
+{
+  "input_roots": ["../simulation/C12_DDE_allcomb_3C3_digi_SiEdep.root"],
+  "root_executable": null,
+  "entries": [0, 5],
+  "n_tracks": 3,
+  "representation": "direct_waveform",
+  "preprocessing": {"pedestal_tb_window": [0,30], "activity_threshold_adc": 40, "require_zero_front": false},
+  "space_points": {"activity_threshold_adc": 40, "island_fraction_of_peak": 0.02},
+  "finding": {
+    "method": "waveform_hypotheses", "k": 3, "tb_bin": 4, "seed": 20261027,
+    "activity_threshold_adc": 40, "feature_time_scale": 0.36,
+    "geometry": {"scales_mm": [2,6,4]},
+    "checkpoint": null,
+    "waveform": {"max_hypotheses": 4, "nonlinear_max_nfev": 8,
+      "compare_k": true, "k_candidates": [1,2,3], "holdout_modulo": 4, "holdout_fold": 0}
+  },
+  "drift": {"calibrated_for_charge_mean": false, "velocity_mm_per_ns": null,
+    "t0_tb": null, "reference_w_mm": null, "sign": null, "tb_ns": 40},
+  "fitting": {"method": "linear_rts", "process_noise_mode": "none", "minimum_layers": 4,
+    "robust": {"kind": "daf", "annealing_temperatures": [16,8,4,2,1]}},
+  "vertex": {"max_backward_mm": 500, "max_forward_mm": 0, "condition_limit": 1000000},
+  "si_geometry": null,
+  "energy": {"stopping_tables": null, "material_paths_validated": false,
+    "material_path_csv": null, "material_path_request_csv": null, "material_path_receipt": null,
+    "association_position_sigma_mm": null,
+    "alpha_stops_in_Si_validated": false, "validated_kinetic_upper_bound_mev": null,
+    "si_energy_sigma_mev": null},
+  "refitting": {"enabled": false},
+  "navigator": {"enabled": false, "repo": "../..", "parameters": "../simulation/SimParameters.mac"},
+  "kinematics": {"direction_reference": "first_observed_plane",
+    "acknowledge_first_point_direction_as_vertex_approximation": false},
+  "masses": {"alpha_mev": null, "carbon12_ground_mev": null}
+}

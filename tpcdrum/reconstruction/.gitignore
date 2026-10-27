@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.native_build/
+.native_cache/
+_native_build/
+results/
+*.pt
+*.root

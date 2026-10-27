@@ -1,0 +1,165 @@
+TPCDrum Kalman-family fitting / smoothing — implementation and primary sources
+2026-10-27. Mathematical implementation, not a statement of detector performance.
+
+Primary sources checked
+
+1. ACTS collaboration, Tracking in a nutshell, Kalman formalism and track fitting.
+   https://acts.readthedocs.io/en/v27.0.0/tracking.html
+   https://acts-project.github.io/class_acts_1_1_gain_matrix_smoother.html
+   Basis: prediction x-=f(x), P-=F P F^T+Q; measurement update; backwards
+   smoothing shares later measurement information with earlier states. Material
+   transport and measurement calibration are distinct inputs. ACTS itself is not
+   called by this module. Its performance cannot be attributed to this code.
+
+2. H. E. Rauch, F. Tung, C. T. Striebel, Maximum likelihood estimates of linear
+   dynamic systems, AIAA Journal 3 (1965) 1445–1450, doi:10.2514/3.3166.
+   https://doi.org/10.2514/3.3166
+   RTS gain C_k=P_filtered,k F_k^T inv(P_predicted,k+1).
+   x_s,k=x_f,k+C_k(x_s,k+1-x_pred,k+1).
+   P_s,k=P_f,k+C_k(P_s,k+1-P_pred,k+1)C_k^T.
+   For UKF the sigma-point cross covariance replaces P_filtered F^T. This is a
+   fixed-interval Gaussian smoother, not an independent second track fit.
+
+3. S. J. Julier and J. K. Uhlmann, Unscented filtering and nonlinear estimation,
+   Proceedings of the IEEE 92 (2004) 401–422, doi:10.1109/JPROC.2003.823141.
+   https://doi.org/10.1109/JPROC.2003.823141
+   University-hosted paper:
+   https://www.ene.unb.br/gaborges/disciplinas/pe/papers/julier2004.pdf
+   Basis: deterministic sigma points transform a mean and covariance through a
+   nonlinear function. This implementation uses 2n+1 points and configurable
+   alpha/beta/kappa; the numerical defaults are 1/2/0. No physical calibration is
+   inferred from choosing UKF parameters. Sigma energies outside the supplied
+   stopping-table domain cause failure rather than silent clipping.
+
+4. J. Rauch and T. Schlüter, GENFIT — a Generic Track-Fitting Toolkit,
+   J. Phys. Conf. Ser. 608 (2015) 012042; arXiv:1410.3698.
+   https://arxiv.org/abs/1410.3698
+   https://github.com/GenFit/GenFit
+   Primary project API documentation for DAF:
+   https://software.belle2.org/release-08-03-03/doxygen/classgenfit_1_1DAF.html
+   GENFIT's DAF iterates weighted Kalman fits through an annealing schedule and
+   supports noise hits and competing measurement hypotheses. Our implementation
+   is narrower: one fixed observed space point per v, outlier-versus-inlier
+   reweighting, and RTS after each pass. It is DAF-inspired, not a GENFIT binding
+   and not GENFIT's full left/right or multi-hit ambiguity solution.
+
+5. Geant4 collaboration, Physics Reference Manual, Multiple Scattering.
+   https://geant4.web.cern.ch/documentation/dev/prm_html/PhysicsReferenceManual/electromagnetic/elastic_scattering/msc.html
+   The manual gives the projected Gaussian-core Highland scale
+   theta0=13.6 MeV * |z|/(beta*p) * sqrt(s/X0) * [1+.038 ln(s/X0)].
+   It states the usual thickness validity interval 1e-3 <= s/X0 <= 100 and
+   explains that Geant4 uses more detailed MSC models. Low-energy alpha transport
+   in thin gas need not satisfy the approximation. The code therefore rejects
+   out-of-range thickness unless the approximation is explicitly allowed, and
+   flags any allowed extrapolation. A measured/exported energy-dependent angular
+   diffusion table is a separate option. This is not a Geant4 transport clone.
+
+What this implementation actually estimates
+
+Physical coordinates: observation=(u,v,w) millimetres; v increases along the
+configured downstream branch. State=(u,w,tu,tw,T), tu=du/dv and tw=dw/dv.
+No magnetic field and no deterministic curvature term are included.
+
+Mean segment transport:
+  u_next=u+tu*Delta_v; w_next=w+tw*Delta_v; slopes unchanged in mean.
+  path length s=Delta_v*sqrt(1+tu^2+tw^2).
+  dT/ds=-S(T), S in MeV/mm, integrated with RK4 inside the tabulated domain.
+The EKF differentiates this nonlinear energy transport numerically with guarded
+one-sided differences at an endpoint. UKF propagates sigma points. Substep size
+is a numerical accuracy setting, not a material property.
+
+There is one explicit homogeneous material model between observation planes.
+Dead windows, Si transport and material interfaces are not silently inserted.
+The inverse-energy module handles a separately specified material path. A T prior
+supplied to this fitter must already refer to the FIRST OBSERVED v. A Si energy
+or a production-vertex energy is not that prior without the required transport.
+
+Process noise:
+  choose none, tuned, table, or highland explicitly.
+  tuned angular_variance_rad2_per_mm is a tuning input, not measured TPC data.
+  table requires energy_mev and projected_angular_variance_rad2_per_mm, with
+  units energy=MeV and angular_variance=rad2/mm; no out-of-table interpolation.
+  highland requires mass_mev, charge_e and radiation_length_mm explicitly.
+  For projected angular variance theta^2, the slope covariance is
+    S_slope=theta^2*(1+tu^2+tw^2)*[[1+tu^2,tu*tw],[tu*tw,1+tw^2]].
+  A uniform diffusion approximation gives position/slope blocks
+    Q_pp=Delta_v^2*S_slope/3, Q_pt=Delta_v*S_slope/2, Q_tt=S_slope.
+  Energy noise Q_TT=straggling_variance_mev2_per_mm*s. The coefficient must be
+  supplied; zero is allowed only as an explicit deterministic-loss approximation.
+  Position-energy noise correlations within a segment are not modelled.
+
+Measurement covariance:
+  N x 2 x 2 means covariance of (u,w), at fixed v.
+  N x 3 x 3 means covariance of (u,v,w); projected effective covariance is
+    R_eff=J R_uvw J^T, J=[[1,-tu,0],[0,-tw,1]].
+  This is a first-order treatment of uncertain v, not a full latent-surface fit.
+  Updates use the Joseph covariance expression. Predicted/filtered/smoothed
+  states, covariances, innovation residuals and whitened innovation pulls are
+  retained. Round-off negative eigenvalues are removed; substantially indefinite
+  covariances cause an explicit failure. No detector covariance is invented.
+
+Outlier treatment:
+  The measurement's own information is removed from its smoothed 2D marginal
+  before computing an external/cavity residual. Let B be that marginal covariance
+  and Rw=R/w: B_cavity=inv(inv(B)-inv(Rw)); the analogous information-vector
+  subtraction gives its external prediction. Use R+B_cavity to whiten it.
+  DAF-inspired weight w=1/(1+exp((chi2_external-chi2_cut)/(2*temperature))).
+  Next pass uses R/w; temperatures decrease to 1. Huber reweighting is an option.
+  Weights are not independently calibrated probabilities. Fixed-point change and
+  convergence are exported; a finite iteration budget can leave nonconvergence.
+  Very flexible process noise may still absorb outliers or real hard scattering.
+
+Initialisation / configuration
+
+linear_rts is the 4D geometry baseline. Its returned arrays retain five columns
+but T and its covariance row/column are NaN; energy_treatment labels this.
+Its automatic geometry seed is Theil-Sen-like and data derived, with deliberately
+diffuse numerical geometry prior. An explicit independent prior is supported.
+Energy-aware EKF/UKF require an explicit 5x5 initial_covariance: an enormous slope
+variance is not a harmless diffuse prior when sigma-point path lengths affect
+energy loss. Its energy variance must agree with energy_sigma_mev squared.
+An optional initial_state also has to agree with the supplied T prior.
+
+Minimum energy-aware configuration (VALUES MUST COME FROM YOUR INPUTS):
+  method: ekf_rts or ukf_rts
+  coordinate_system: physical_uvw_mm
+  process_noise_mode: table / highland / tuned / none, explicitly selected
+  energy_reference: first_point
+  energy_sigma_mev: explicit
+  initial_covariance: explicit 5x5 matrix
+  straggling_variance_mev2_per_mm: explicit
+Stopping table dictionary:
+  energy_mev: increasing array
+  dedx_mev_per_mm: same-length nonnegative array
+  material: material identifier
+  units: {energy: MeV, length: mm, dedx: MeV/mm}
+  provenance: exporter/source/conditions, retained in the fit result
+This module consumes the dedx columns; the inverse-energy module additionally
+needs the range_mm column from the same table exporter.
+Geant4's total stopping-power query can include electronic+nuclear stopping,
+whereas its CSDA-range query follows the energy-loss tables. Their numerical
+derivative/inverse relation is not assumed here. Closure between the separate
+forward-dedx and inverse-range transports must be checked on actual exported
+tables and reported before treating the reconstructed energy as validated.
+
+Interpretation limits
+
+The returned 'initial' tangent is at the first observed plane, AFTER any earlier
+unobserved scattering. RTS propagates later measurements' information backwards;
+it does not undo an individual random kick, make initial MC truth observable, or
+prevent late measurements from affecting the earlier estimate. Propagating to a
+production vertex needs a vertex estimate and a specified material/noise path.
+No 120-degree or equal-energy constraint is used in this fitter or its checks.
+
+Forward innovation chi2 and posterior measurement residual chi2 are distinct
+diagnostics. Nominal 2N-4 geometric degrees of freedom is not automatically a
+calibrated goodness-of-fit distribution when process noise, fitted energy,
+data-derived seeds or robust weights are present. No p-value is fabricated.
+
+The tests cover independent least-squares equivalence, known stopping transport,
+unscented moment closure, synthetic curved/scattered trajectories, cavity-based
+outlier rejection, covariance/innovation closure on known synthetic noise, and
+failures for missing calibration or table/model-domain violations. They establish
+software/mathematical behaviour ONLY. User's new equal-energy DDE digi, measured
+space-point errors, drift conversion, gas stopping/scattering/straggling inputs,
+and held-out detector-data accuracy are still unverified as of this implementation.

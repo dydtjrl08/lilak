@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-27",
+  "objective_complete": false,
+  "software_checks": {
+    "tests": 116,
+    "passed": 116,
+    "skipped": 0,
+    "native_root_crosscheck": true,
+    "log": "tmp/reconstruction_checks_release_20261027.log"
+  },
+  "local_environment": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "scipy": "1.18.1",
+    "uproot": "5.7.7",
+    "awkward": "2.14.0",
+    "torch": "2.14.0",
+    "root": "6.40.02"
+  },
+  "target_server_environment": {
+    "root": "6.24/06",
+    "torch": "1.10.1+cu113",
+    "native_execution_verified": false,
+    "numpy_constraint": "requirements intentionally restrict NumPy<2 for legacy Torch; a full legacy-runtime matrix has not been run"
+  },
+  "actual_inputs": {
+    "old_3C3_events": 44211,
+    "inspected_native_wave_entries": [
+      0,
+      5
+    ],
+    "si_edep_present": false,
+    "actual_two_path_stage_ROOT_smoke": true,
+    "missing_calibration_propagation_verified": true,
+    "whole_dataset_end_to_end_validation": false
+  },
+  "training": "references/actual_pilot_20261027.json",
+  "pending": [
+    "New equal-energy DDE digitization",
+    "Actual charge-mean drift/t0/PRF calibration",
+    "Native server Geant4 material/geometry/path export compilation and execution",
+    "Si energy/dead-layer/stopping and covariance inputs",
+    "Independent held-out trajectory, vertex, energy, mass, angular-resolution/coverage validation"
+  ],
+  "accuracy_claim": "None. Synthetic math closure and a small old-data pilot do not establish new-DDE detector precision."
+}

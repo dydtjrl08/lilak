@@ -1,0 +1,49 @@
+Primary references checked 2026-10-27
+
+ROOT Collaboration, TLorentzVector class reference
+https://root.cern.ch/doc/master/classTLorentzVector.html
+Scope: four-vector ordering, E^2-p^2 metric, active Boost convention and BoostVector=p/E.
+COM transformation applies -sum(p)/sum(E), not +sum(p)/sum(E).
+
+Geant4 Collaboration, G4EmCalculator interface and implementation
+https://github.com/Geant4/geant4/blob/master/source/processes/electromagnetic/utils/include/G4EmCalculator.hh
+https://github.com/Geant4/geant4/blob/master/source/processes/electromagnetic/utils/src/G4EmCalculator.cc
+Scope: ComputeTotalDEDX, GetCSDARange and material/region arguments. Total stopping and
+the precomputed CSDA range have separate definitions; validate their consistency in use.
+The server's installed version remains the authority for build/API compatibility.
+
+Geant4 Collaboration, G4EmParameters
+https://github.com/Geant4/geant4/blob/master/source/processes/electromagnetic/utils/include/G4EmParameters.hh
+Scope: SetBuildCSDARange must precede physics initialization for CSDA tables.
+
+Geant4 Collaboration, G4Navigator
+https://github.com/Geant4/geant4/blob/master/source/geometry/navigation/include/G4Navigator.hh
+Scope: LocateGlobalPointAndSetup, ComputeStep, SetGeometricallyLimitedStep for geometry
+boundary segmentation of a supplied reconstructed polyline. Navigation is not MC tracking.
+
+Geant4 Collaboration, G4VPhysicalVolume
+https://github.com/Geant4/geant4/blob/master/source/geometry/management/include/G4VPhysicalVolume.hh
+Scope: object-to-mother rotation/translation convention used to export Si active axes.
+
+Geant4 Collaboration, Book For Application Developers: Physics Processes
+https://geant4.web.cern.ch/documentation/dev/bfad_html/ForApplicationDevelopers/TrackingAndPhysics/physicsProcess.html
+Scope: separation of transport, energy-loss processes and fluctuations. Mean stopping
+tables do not reveal a particular event's unobserved stochastic loss.
+
+Implementation equations (c=1, numeric energies/masses MeV, lengths mm)
+  p_alpha = sqrt(T_alpha*(T_alpha+2*m_alpha))*unit_direction
+  E_alpha = T_alpha+m_alpha
+  M_inv = sqrt((sum E_alpha)^2 - |sum p_alpha|^2)
+  E_x = M_inv - m_C12_ground; Q_3alpha = M_inv - 3*m_alpha
+  beta_parent = sum p_alpha / sum E_alpha
+  COM vectors = active_boost(lab vectors, -beta_parent)
+  epsilon_i = T_i_COM / sum_j T_j_COM
+  Dalitz x=(epsilon_2-epsilon_1)/sqrt(3), y=epsilon_3-1/3
+  Pair angle = acos(clamp(p_i_COM dot p_j_COM/(|p_i_COM||p_j_COM|),-1,1))
+  Homogeneous material inverse: R(T_up)=R(T_down)+path_length
+  Multiple materials: apply inverses in reverse vertex-to-Si material order
+
+No exact nuclear-mass constants are silently chosen by physics.py. Runtime masses
+come from an explicit compatible calibration (e.g. initialized Geant4 particle table).
+7.654 MeV is an excitation-energy target, not the C12 parent rest mass.
+No 120-degree/equal-energy constraint is imposed in independent kinematics.

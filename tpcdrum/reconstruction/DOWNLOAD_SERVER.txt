@@ -1,0 +1,38 @@
+서버에서 새 코드만 받기 (기존 checkout에는 pull하지 않음)
+
+cd ~/workspace
+git clone --depth 1 --single-branch --branch codex/staged-tpc-reconstruction \
+  https://github.com/dydtjrl08/lilak.git lilak_reco_delivery_20261027
+python3 ~/workspace/lilak_reco_delivery_20261027/tpcdrum/reconstruction/install_new_reconstruction.py \
+  ~/workspace/lilak_seunghwan
+
+이미 delivery 폴더가 있으면 clone은 멈춘다. 새 폴더 이름을 지정한다.
+기존 서버에 reconstruction 폴더나 같은 이름의 새 매크로가 있으면 설치도 멈춘다.
+이 경우 기존 파일을 지우지 말고 delivery clone에서 소스를 확인한다.
+
+새 DDE digitization 전에도 현재 설정/물질 자료는 먼저 모을 수 있다.
+
+cd ~/workspace/lilak_seunghwan
+RECO_EXPORT_DIR=~/workspace/reco_inputs_20261027 \
+  bash tpcdrum/reconstruction/calibration/collect_server_inputs.sh \
+  --geant4-material-export
+
+이는 기존 simulation의 geometry/physics 초기화로 물질표를 추출하는 단계다.
+기존 MC/digi/가스/GEM gain은 수정하지 않는다. Geant4 exporter의 서버 빌드 검증은
+아직 안 되었으므로 실패하면 export/compile/link 로그와 collection_manifest를 전달한다.
+위 출력 폴더가 이미 있으면 RECO_EXPORT_DIR에 새 이름을 쓴다.
+
+Mac 터미널에서 (위 출력 이름을 그대로 썼을 경우)
+
+mkdir -p "/Users/yongseok/Documents/Codex/2026-09-02/uniform-digitization-charge-centroid/received_data/kalman_inputs"
+scp -P 5522 \
+  yongseok@210.117.209.247:/home/yongseok/workspace/reco_inputs_20261027.tar.gz \
+  "/Users/yongseok/Documents/Codex/2026-09-02/uniform-digitization-charge-centroid/received_data/kalman_inputs/"
+
+새 digi가 완성된 후에는 calibration/README_physics_inputs.txt의 --digi 인자에
+simulation 안의 실제 *_digi_SiEdep.root 경로를 추가해 저장된 입력 header도 모은다.
+새 DDE가 아직 없다면 그 경로를 현재 존재한다고 가정해 실행하지 않는다.
+
+Jupyter에서 실행하려면 설치된 reconstruction/reconstruction_control.ipynb를 연다.
+기존 CNN 커널을 선택하고 INPUT_ROOT를 실제 새 digi로 바꾼 뒤 inspect부터 실행한다.
+ROOT에서 실행하는 명령과 단계별 재시작 방법은 README.txt에 있다.
