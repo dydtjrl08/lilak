@@ -1,0 +1,41 @@
+GitHub에서 받아도 기존 서버 파일을 유지하는 설치
+
+이번 변경은 새 macro 폴더와 누락된 두 task의 source/header만 추가한다.
+기존 makeSimData, SimParameters, detector, data 또는 빌드 설정을 변경하지 않는다.
+GitHub 기본 브랜치는 tpc-drum이며 이 작업은 별도 codex 브랜치/PR로 제공한다.
+
+서버 기존 checkout에서는 우선 git pull을 실행하지 않는다.
+다른 폴더에 새 branch를 clone한 뒤, 새 macro 폴더만 추가한다.
+
+git clone --single-branch --branch codex/hoyle-subsets-safe-delivery \
+  https://github.com/dydtjrl08/lilak.git \
+  ~/workspace/lilak_hoyle_delivery_20261027
+
+bash ~/workspace/lilak_hoyle_delivery_20261027/tpcdrum/simulation/hoyle_prepare_20261027/install_new_macros.sh \
+  ~/workspace/lilak_seunghwan
+
+설치 script는 목적지 hoyle_prepare_20261027이 이미 있으면 중단한다.
+이전에 tar.gz로 설치했다면 그 폴더를 그대로 사용하면 된다.
+기존 MC/digi/설정/task source와 .git은 바꾸지 않는다.
+reset --hard, clean, 강제 checkout, 파일 삭제 또는 rsync --delete를 사용하지 않는다.
+전송용 clone에는 새 task source도 있지만, 이 script는 task를 기존 서버에 복사하지 않는다.
+MC 분리는 기존 LKMCTrack/LKMCStep dictionary만으로 실행한다.
+digitization은 서버에서 예전에 빌드한 STDSiEdepSumTask/STHoyleMetaCopyTask가 필요하다.
+완전히 새 clone으로 digitization할 경우 새 clone 쪽에서 LILAK을 구성·빌드해야 한다.
+
+나중에 기존 서버 checkout에서도 Git을 사용하려면 먼저 별도로 상태를 확인한다.
+  git -C ~/workspace/lilak_seunghwan status --short --untracked-files=no
+  git -C ~/workspace/lilak_seunghwan branch --show-current
+  git -C ~/workspace/lilak_seunghwan remote -v
+이 상태를 확인하기 전에는 기존 디렉터리에 자동 pull/merge를 적용하지 않는다.
+
+git pull은 원격 변경을 현재 checkout에 통합하는 작업이다.
+원격에서 삭제한 tracked 파일은 로컬 수정이 없으면 pull로도 삭제될 수 있다.
+일반 untracked 충돌은 보통 중단되지만 ignored 파일까지 언제나 보존된다고
+가정하면 안 된다. .gitignore는 백업이 아니다.
+따라서 이번 설치는 기존 checkout과 원격 history를 통합하지 않는 경로를 제공한다.
+
+설치 script 검증(원본 파일 byte 보존 / 기존 목적지 거절 / symlink 거절):
+  python3 checks/check_install_new_macros.py
+
+MC 선별/digitization 사용법은 같은 폴더의 README_KO.txt에 있다.

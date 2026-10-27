@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-27",
+  "local_root_version": "6.40.02",
+  "mc_subset_test": {
+    "result": "PASS",
+    "checks": 5370,
+    "input_events": 8,
+    "accepted_direct_decays": 2,
+    "no_triplet": 4,
+    "ambiguous": 1,
+    "malformed": 1,
+    "output_3C1": 6,
+    "output_3C2": 6,
+    "output_3C3": 2,
+    "tests": [
+      "recoil at same vertex excluded by parentage",
+      "sequential/ambiguous/duplicate ID rejected",
+      "all combinations and original track/step values preserved",
+      "nine MCStep branches preserved",
+      "no TPC-hit alpha retained",
+      "source UUID/entry/parent/combination preserved",
+      "original input bytes unchanged",
+      "overwrite refused",
+      "partial/full markers",
+      "failed selected-step copy leaves completion=0"
+    ],
+    "interpreted_macro_without_plus": "PASS"
+  },
+  "digitizer_check": {
+    "cling_parse_with_interface_stubs": "PASS",
+    "real_root_subset_preflight_3C1_3C2_3C3": [
+      6,
+      6,
+      2
+    ],
+    "original_mc_rejected_as_subset": true,
+    "actual_drift_electronics_run": false,
+    "stub_run_calls": 0
+  },
+  "server_root_6_24_execution": false,
+  "real_user_mc_execution": false,
+  "test_interface_note": "ROOT I/O verified with test-only LKMCTrack/LKMCStep accessor stand-ins; not real LILAK binary/physics validation. Fixture code and data are not shipped.",
+  "original_sources_unchanged": [
+    "STDecaySubsetBuilder",
+    "STDecaySubsetTask",
+    "makeSimData",
+    "gas/GEM/detector tasks"
+  ],
+  "files": [
+    {
+      "name": "C12_digitize_hoyle_subset.C",
+      "bytes": 12144,
+      "sha256": "324403d76a64be08d5e4a0f9b5e6f3f5e58979a270963815c4cdc5bd25e04442"
+    },
+    {
+      "name": "C12_make_hoyle_subsets.C",
+      "bytes": 18517,
+      "sha256": "baf2e435665501305e9259b99f89be6cea1591149f958bd4d2035e34de28d429"
+    },
+    {
+      "name": "README_KO.txt",
+      "bytes": 8650,
+      "sha256": "79e0a91afc451b11bf1997e4accdca4b692b7eed4a246c77639faf333ea9e930"
+    }
+  ],
+  "github_delivery_validation": {
+    "non_overwriting_installer_checks_passed": 3,
+    "checks": [
+      "existing files byte-for-byte preserved",
+      "existing macro destination refused",
+      "symlink destination refused"
+    ],
+    "shell_syntax": "bash -n passed",
+    "server_checkout_pulled_or_modified": false
+  }
+}
