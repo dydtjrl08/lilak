@@ -145,3 +145,7 @@ Si, 물질 경로, 에너지
   pulse template 평균시간, field-dependent drift와 당시 asset 파일 내용이 더 필요하다.
   현재 설정과 당시 저장된 참조를 구분해 모으는 명령은
   calibration/README_timing_audit.txt에 있다. 가스/GEM gain은 변경하지 않는다.
+
+관측 ROOT handoff와 고정 표본 평가의 추가 설명
+  README_HANDOFF.txt: 같은 예측의 단계별 저장, K=0/실패와 coverage, 서버 환경.
+  calibration/README_empirical_timing.txt: inference와 분리된 MC timing 연구 도구.

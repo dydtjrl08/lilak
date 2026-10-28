@@ -4,5 +4,16 @@ __pycache__/
 .native_cache/
 _native_build/
 results/
+root/
+weights/
+checkpoints/
+runtime_receipts/
 *.pt
+*.pth
+*.onnx
 *.root
+*.npy
+*.npz
+*.tar
+*.tar.gz
+*.zip

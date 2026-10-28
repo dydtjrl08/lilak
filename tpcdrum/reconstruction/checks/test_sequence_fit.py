@@ -1,6 +1,8 @@
 """Legacy sequence adapter checks: synthetic geometry, never CNN accuracy claims."""
 import copy
+import hashlib
 from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
@@ -130,27 +132,36 @@ class SequenceFitTests(unittest.TestCase):
         np.testing.assert_array_equal(record["components"], before)
         self.assertEqual(config, before_config)
 
-    def test_actual_old_source_checkpoint_loading_and_path_contract(self):
+    def test_synthetic_own_checkpoint_loading_and_path_contract(self):
+        # A locally created UNTRAINED fixture checks serialization and adapter
+        # contracts, without historical weights or training-data identities.
         try:
             import torch
         except ImportError:
             self.skipTest("Optional torch unavailable; no untrained replacement is used")
-        checkpoint = Path(__file__).resolve().parents[2] / "CnnTask/TrackReconstruction/root_reco_20261025/models/sequence_seed20260930.pt"
-        if not checkpoint.is_file():
-            self.skipTest("User's historical checkpoint is not in this source checkout")
-        cfg = sequence_config(False)
-        cfg["fitting"]["legacy_sequence"].update(checkpoint=str(checkpoint), device="cpu",
-                    expected_data_fingerprint="92e9fec1047ad6b483bf9995d91eb70760c7521a1bd8c81fc4ccc1dbf5299db2")
-        random_before = torch.get_rng_state().clone()
-        output, diagnostics = fit_event(waveforms(), cfg)
-        self.assertEqual(diagnostics["status"], "ok", diagnostics)
-        self.assertTrue(diagnostics["trained_checkpoint_loaded"])
-        self.assertEqual(diagnostics["model"]["checkpoint_sha256"],
-                         "97fe05ce8df323a1ec4f62704e5e7f2f5776a94140748e4a1df1a9fe267947d5")
-        self.assertTrue(diagnostics["model"]["composite_fingerprint_verified"])
-        self.assertFalse(diagnostics["model"]["component_domain_validated"])
-        self.assertTrue(torch.equal(random_before, torch.get_rng_state()))
-        self.assertTrue(np.all(np.isnan(output["fit_covariances"])))
+        from reconstruction.legacy_sequence.sequence_models import build_model
+        model_config=dict(n_layers=12,n_pads=74,resnet_widths=[4,4,4],
+            embedding_dim=4,gru_hidden=4,dropout=0.,layer_y_mm=(np.arange(12)*12.).tolist())
+        fingerprint="synthetic-software-fixture-not-a-training-data-identity"
+        with tempfile.TemporaryDirectory() as folder:
+            checkpoint=Path(folder)/"own_synthetic_checkpoint.pt"
+            with torch.random.fork_rng(devices=[]):
+                torch.manual_seed(123)
+                model=build_model("resnet_sequence",model_config)
+            torch.save(dict(method="resnet_sequence",output_units="degree",model_config=model_config,
+                model=model.state_dict(),data_fingerprint=fingerprint),checkpoint)
+            cfg=sequence_config(False)
+            cfg["fitting"]["legacy_sequence"].update(checkpoint=str(checkpoint),device="cpu",
+                trusted_checkpoint=True,expected_data_fingerprint=fingerprint)
+            random_before=torch.get_rng_state().clone()
+            output,diagnostics=fit_event(waveforms(),cfg)
+            self.assertEqual(diagnostics["status"],"ok",diagnostics)
+            self.assertTrue(diagnostics["trained_checkpoint_loaded"])  # Loading check, not an accuracy assertion.
+            self.assertEqual(diagnostics["model"]["checkpoint_sha256"],hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+            self.assertTrue(diagnostics["model"]["composite_fingerprint_verified"])
+            self.assertFalse(diagnostics["model"]["component_domain_validated"])
+            self.assertTrue(torch.equal(random_before,torch.get_rng_state()))
+            self.assertTrue(np.all(np.isnan(output["fit_covariances"])))
         from reconstruction.legacy_sequence.sequence_adapter import build_paths
         predictions = FixedObservedPredictor().predict(waveforms()["components"])
         actual, equivalent = build_paths(predictions), _numpy_paths(predictions)

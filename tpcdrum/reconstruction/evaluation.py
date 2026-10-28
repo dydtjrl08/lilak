@@ -34,6 +34,18 @@ def _reference_index(path):
     return index
 
 
+def _prediction_state(row):
+    """Explicit availability/failure flags only; ambiguity is not a failure."""
+    def flag(name,default):
+        if name not in row:return default
+        value=np.asarray(row[name])
+        if value.size!=1 or value.dtype.kind not in 'biuf' or not np.isfinite(value).all() or value.item() not in (0,1):
+            raise ValueError('Prediction flag must be a scalar 0/1: '+name)
+        return bool(value.item())
+    failed=flag('finding_failed',False) or not flag('finding_prediction_available',True)
+    return dict(prediction_available=not failed,finding_failed=failed)
+
+
 def _fractions(row,reference,tb_bin):
     q=np.asarray(row['positive_waveform'],float)
     pred=np.asarray(row['components'],float)
@@ -51,7 +63,7 @@ def _fractions(row,reference,tb_bin):
     if not np.allclose(target.sum(0)+target_bg,q,atol=2e-6*scale,rtol=2e-6):
         raise ValueError('Reference attribution differs from the same observed positive ADC')
     kp,kt=len(pred),len(target);k=max(kp,kt)
-    if k>6 or min(kp,kt)<1:raise ValueError('Exact eventwise assignment supports positive K<=6')
+    if k>6 or kt<1:raise ValueError('Exact eventwise assignment supports reference K>=1, predicted K>=0, maximum K<=6')
     if 512%tb_bin:raise ValueError('Evaluation tb_bin must divide 512')
     def coarse(components,background):
         padded=np.zeros((k+1,12,64,512));padded[:len(components)]=components;padded[-1]=background
@@ -70,6 +82,19 @@ def _fractions(row,reference,tb_bin):
     m['matched_prediction_index']=np.asarray([i if i<kp else -1 for i in m['slot_permutation'][:kt]],dtype=np.int64)
     m['positive_charge']=float(q.sum())
     m['has_signal']=bool(q.sum()>0)
+    state=_prediction_state(row);m.update(state)
+    m['charge_l1_defined']=bool(state['prediction_available'] and m['has_signal'] and np.isfinite(m['charge_l1']))
+    if not state['prediction_available']:
+        # A K=0 helper placeholder preserves the event; it does not claim a
+        # successful background-only prediction and cannot earn favorable error.
+        m.update(charge_l1=float('nan'),absolute_charge_error=float('nan'),overlap_fraction_mae=float('nan'),
+            precision=np.full_like(m['precision'],np.nan),recall=np.full_like(m['recall'],np.nan),
+            recovered=np.zeros_like(m['recovered']),reco_layers=np.zeros_like(m['reco_layers']),
+            matched_prediction_index=np.full(kt,-1,dtype=np.int64),slot_permutation=[-1]*k)
+    elif not m['has_signal']:
+        m.update(charge_l1=float('nan'),absolute_charge_error=0.,overlap_fraction_mae=float('nan'),
+            precision=np.full_like(m['precision'],np.nan),recall=np.full_like(m['recall'],np.nan),
+            recovered=np.zeros_like(m['recovered']))
     return m
 
 
@@ -192,6 +217,13 @@ def _physics_errors(row,diagnostic,reference,matching,cfg,truth_meta):
         matching_reused_for_energy_and_correlations=True,vertex_status='missing_reference_or_reconstruction',
         energy_status='missing_vertex_energy_or_initial_MC_kinetic',kinematics_status='missing_three_body_reference',
         accepted_and_candidate_metrics_separate=True,no_120_degree_constraint=True)
+    if not _prediction_state(row)['prediction_available'] or not np.any(np.asarray(matching)>=0):
+        # Stale vertex/energy/kinematics fields cannot revive a failed/no-track
+        # ancestor. Independent reference cohort counts remain outside here.
+        notes.update(vertex_status='finding_unavailable_or_no_matched_tracks',
+            energy_status='finding_unavailable_or_no_matched_tracks',
+            kinematics_status='finding_unavailable_or_no_matched_tracks')
+        return values,notes
     target_vertex=np.asarray(reference.get('truth_vertex_uvw_mm',[]),float)
     if target_vertex.shape==(3,) and np.isfinite(target_vertex).all():
         values['reference_vertex_uvw_mm']=target_vertex.copy()
@@ -332,6 +364,9 @@ def evaluate_stage(observation_root,truth_root,output_root,output_json=None,conf
             arrays=dict(file_index=np.int64(key[0]),entry=np.int64(key[1]),source_group=row['source_group'],
                 charge_l1=np.float64(m['charge_l1']),overlap_fraction_mae=np.float64(m['overlap_fraction_mae']),
                 positive_charge=np.float64(m['positive_charge']),has_observed_signal=np.int64(m['has_signal']),
+                charge_l1_defined=np.uint8(m['charge_l1_defined']),
+                finding_prediction_available=np.uint8(m['prediction_available']),finding_failed=np.uint8(m['finding_failed']),
+                observed_zero_charge=np.uint8(not m['has_signal']),
                 predicted_k=np.int64(m['predicted_k']),reference_k=np.int64(m['reference_k']),
                 matched_prediction_index=m['matched_prediction_index'],
                 soft_precision=m['precision'],soft_recall=m['recall'],
@@ -345,18 +380,29 @@ def evaluate_stage(observation_root,truth_root,output_root,output_json=None,conf
                 missing_direction_is_not_zero=not bool(np.all(valid))))
             records.append(dict(file_index=key[0],entry=key[1],charge_l1=m['charge_l1'],positive_charge=m['positive_charge'],
                 absolute_charge_error=m['absolute_charge_error'],overlap_fraction_mae=m['overlap_fraction_mae'],
+                charge_l1_defined=m['charge_l1_defined'],prediction_available=m['prediction_available'],finding_failed=m['finding_failed'],
                 visible=int(m['true_visible'].sum()),recovered=int(m['recovered'].sum()),direction_valid=int(valid.sum()),
                 direction_reference_slots=len(valid),direction_status=status,direction_errors=opening,theta_residuals=theta,
                 projected_ols_residuals=projected_ols,physical_errors=physics,physical_status=physics_notes))
         if expected is not None and seen!=expected:raise ValueError('Observation stage lacks requested event keys')
         signal=[r for r in records if r['positive_charge']>0]
-        overlap=[r['overlap_fraction_mae'] for r in signal if np.isfinite(r['overlap_fraction_mae'])]
+        scored=[r for r in signal if r['charge_l1_defined'] and np.isfinite(r['charge_l1'])]
+        overlap=[r['overlap_fraction_mae'] for r in scored if np.isfinite(r['overlap_fraction_mae'])]
+        all_charge=float(sum(r['positive_charge'] for r in signal))
+        scored_charge=float(sum(r['positive_charge'] for r in scored))
         angles=np.concatenate([r['direction_errors'] for r in records]) if records else np.empty(0)
         projected=np.concatenate([r['theta_residuals'] for r in records]) if records else np.empty(0)
         projected_ols=np.concatenate([r['projected_ols_residuals'] for r in records]) if records else np.empty(0)
         summary=dict(events=len(records),signal_events=len(signal),no_TPC_events=len(records)-len(signal),
-            mean_event_charge_l1=float(np.mean([r['charge_l1'] for r in signal])) if signal else None,
-            pooled_charge_l1=float(sum(r['absolute_charge_error'] for r in signal)/sum(r['positive_charge'] for r in signal)) if signal else None,
+            positive_charge_events=len(signal),zero_charge_events=len(records)-len(signal),
+            prediction_available_events=sum(r['prediction_available'] for r in records),
+            finding_failed_events=sum(r['finding_failed'] for r in records),
+            scored_active_events=len(scored),unscored_active_events=len(signal)-len(scored),
+            active_score_event_coverage=len(scored)/len(signal) if signal else None,
+            all_cohort_positive_charge=all_charge,pooled_scored_positive_charge=scored_charge,
+            pooled_charge_coverage=scored_charge/all_charge if all_charge>0 else None,
+            mean_event_charge_l1=float(np.mean([r['charge_l1'] for r in scored])) if scored else None,
+            pooled_charge_l1=float(sum(r['absolute_charge_error'] for r in scored)/scored_charge) if scored_charge>0 else None,
             mean_event_overlap_fraction_mae=float(np.mean(overlap)) if overlap else None,
             overlap_events=len(overlap),visible_reference_slots=sum(r['visible'] for r in records),
             recovered_visible_slots=sum(r['recovered'] for r in records),
@@ -385,7 +431,9 @@ def evaluate_stage(observation_root,truth_root,output_root,output_json=None,conf
                 summary[field+'_mean']=float(finite.mean());summary[field+'_rmse']=float(np.sqrt(np.mean(finite**2)))
         metrics={k:float(v) for k,v in summary.items() if isinstance(v,(int,float)) and v is not None}
         writer.metrics(metrics)
-        writer.histogram('charge_l1',[r['charge_l1'] for r in signal],bins=40,range=(0,2))
+        writer.histogram('charge_l1',[r['charge_l1'] for r in scored],bins=40,range=(0,2))
+        writer.histogram('all_cohort_finding_failed',[r['finding_failed'] for r in records],bins=2,range=(-.5,1.5))
+        writer.histogram('all_cohort_zero_charge',[r['positive_charge']==0 for r in records],bins=2,range=(-.5,1.5))
         writer.histogram('overlap_fraction_mae',overlap,bins=40,range=(0,1))
         writer.histogram('direction_opening_error_deg',angles,bins=90,range=(0,180))
         writer.histogram('theta_uv_true_minus_fitted_deg',projected,bins=120,range=(-30,30))

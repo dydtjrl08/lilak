@@ -26,7 +26,7 @@ def toolchain(root_executable=None):
 
 
 def build(name, root_executable=None):
-    if name not in ('observed_reader','truth_reader'):
+    if name not in ('observed_reader','truth_reader','step_reader'):
         raise ValueError('Unknown reconstruction native helper: '+str(name))
     source = HERE/(name+'.cpp')
     if not source.is_file():

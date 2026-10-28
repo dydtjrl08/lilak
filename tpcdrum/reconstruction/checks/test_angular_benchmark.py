@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 from reconstruction.angular_benchmark import (event_result,truth_pairs,wilson,
-    AngularAccumulator,benchmark,summarize_rows,plot_benchmark)
+    AngularAccumulator,benchmark,summarize_rows,plot_benchmark,_attribution,configuration)
 from reconstruction.stage_io import StageWriter,read_stage,manifest,jsonable
 
 
@@ -113,6 +113,56 @@ class AngularMathTests(unittest.TestCase):
         self.assertEqual(accumulator.curves()[0]['all_truth_pairs'],1)
         self.assertEqual(accumulator.curves()[0]['eligible_visible_pairs'],0)
         self.assertTrue(np.isnan(accumulator.curves()[0]['pair_recovered_before_fraction']))
+
+    def test_helper_failure_is_undefined_attribution_not_a_background_prediction_or_ambiguity(self):
+        record,diag,ref=fixture()
+        record.update(components=np.zeros((0,12,64,512),np.float32),
+            background_waveform=record['positive_waveform'].copy())
+        # K=0 without a failure flag remains a scored no-track prediction.
+        score=_attribution(record,ref,configuration())
+        self.assertEqual(score['charge_l1'],2.);self.assertFalse(score['finding_failed'])
+        for flag in ({'finding_prediction_available':0},{'finding_failed':1}):
+            failed=dict(record,**flag,finding_ambiguous=np.int64(1),
+                vertex_free_theta_uv_deg=np.array([0.,2.]),vertex_joint_theta_uv_deg=np.array([0.,2.]),
+                vertex_joint_comparison_valid=np.ones(2,np.uint8),
+                vertex_projected_uv_mm=np.zeros(2),vertex_projected_valid=np.int64(1),
+                vertex_free_projected_uv_mm=np.zeros(2),vertex_free_projected_valid=np.int64(1))
+            score=_attribution(failed,ref,configuration())
+            self.assertTrue(np.isnan(score['charge_l1']));self.assertTrue(np.isnan(score['precision']).all())
+            self.assertTrue(np.isnan(score['recall']).all());self.assertFalse(score['good'].any())
+            self.assertFalse(score['structural_metrics_known'])
+            values,_=event_result(failed,diag,ref)
+            self.assertTrue(values['pair_visible'][0]);self.assertFalse(values['pair_recovered_before'][0])
+            self.assertTrue(values['pair_method_failed_before'][0]);self.assertFalse(values['pair_prediction_available_before'][0])
+            self.assertEqual(values['pair_method_ambiguous_before'][0],-1)
+            self.assertFalse(values['pair_method_confidence_assessed_before'][0])
+            self.assertTrue(np.isnan(values['theta_2d_error_before']).all())
+            self.assertTrue(np.isnan(values['vertex_2d_error_before']).all())
+            curve=summarize_rows([compact_one_method(values)],['method'],{'angle_bins_deg':[0.,5.,180.]})['curves'][0]
+            self.assertEqual(curve['eligible_visible_pairs'],1)
+            self.assertEqual(curve['pair_recovered_before_denominator'],1)
+            self.assertEqual(curve['pair_recovered_before_fraction'],0.)
+            self.assertEqual(curve['pair_method_failed_before_fraction'],1.)
+            self.assertEqual(curve['pair_prediction_available_before_fraction'],0.)
+            self.assertEqual(curve['theta_2d_before_coverage'],0.)
+
+    def test_failed_compact_after_stage_retains_before_permutation_and_fixed_pair_denominator(self):
+        record,diag,ref=fixture(permutation=[1,0])
+        after=dict(matched_prediction_index=np.array([-1,-1]),soft_precision=np.full(2,np.nan),
+            soft_recall=np.full(2,np.nan),charge_l1=np.float64(np.nan),finding_failed=np.int64(1),
+            finding_prediction_available=np.int64(0),finding_ambiguous=np.int64(1),
+            theta_uv_ols_true_minus_fitted_deg=np.zeros(2),vertex_projected_uv_mm=np.zeros(2),
+            vertex_projected_valid=np.int64(1))
+        values,_=event_result(record,diag,ref,after,diag)
+        np.testing.assert_array_equal(values['matching'],[1,0])
+        self.assertTrue(values['pair_recovered_before'][0]);self.assertFalse(values['pair_recovered_after'][0])
+        self.assertTrue(np.isnan(values['pair_purity_after']).all())
+        self.assertTrue(np.isnan(values['theta_2d_error_after']).all())
+        self.assertTrue(np.isnan(values['vertex_2d_error_after']).all())
+        curve=summarize_rows([compact_one_method(values)],['method'],{'angle_bins_deg':[0.,5.,180.]})['curves'][0]
+        self.assertEqual(curve['pair_recovered_after_denominator'],1)
+        self.assertEqual(curve['pair_method_failed_after_count'],1)
+        self.assertEqual(curve['theta_2d_after_coverage'],0.)
 
     def test_all_pairs_and_minimum_pair_are_declared(self):
         record,diag,ref=fixture(k=3)

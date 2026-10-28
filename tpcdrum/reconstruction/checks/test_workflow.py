@@ -8,6 +8,42 @@ from reconstruction.workflow import run_stage,_kinematics_counts
 
 
 class WorkflowHandoffChecks(unittest.TestCase):
+    def test_empty_found_track_set_remains_a_failure_after_root_handoff(self):
+        # A failed finder can legitimately retain an event with zero tracks.
+        # Empty fit_ok must not become an all-tracks-success event via all([]).
+        import uproot
+        with tempfile.TemporaryDirectory() as folder:
+            directory=Path(folder);source=directory/'finding.root'
+            q=np.zeros((12,64,512),np.float32)
+            q[0,20,420]=100.
+            with StageWriter(source,'finding') as writer:
+                writer.write(dict(entry=np.int64(5),file_index=np.int64(0),
+                    source_group=np.int64(123),positive_waveform=q,
+                    components=np.empty((0,12,64,512),np.float32),
+                    background_waveform=q.copy(),finding_ambiguous=np.int64(1)),
+                    dict(finding=dict(status='evaluation_method_failed',found_count=0,ambiguous=True)))
+            config=dict(fitting=dict(minimum_layers=3),
+                        vertex=dict(method='joint_tracks',joint=dict(dimension=2)))
+            fitted=directory/'fitting.root';vertex=directory/'vertex.root'
+            run_stage('fitting',source,fitted,config)
+            source.unlink()
+            row,diagnostic=next(read_stage(fitted))
+            self.assertEqual(row['fit_ok'].size,0)
+            self.assertEqual(diagnostic['fitting']['successful_tracks'],0)
+            with uproot.open(fitted) as root:
+                metrics=root['metrics'].arrays(library='np')
+                values=dict(zip(metrics['name'],metrics['value']))
+                self.assertEqual(values['events'],1.)
+                self.assertEqual(values['stage_output_valid_fraction'],0.)
+            run_stage('vertex',fitted,vertex,config)
+            fitted.unlink()
+            row,diagnostic=next(read_stage(vertex))
+            self.assertFalse(row['vertex_valid'])
+            self.assertFalse(row['vertex_projected_valid'])
+            self.assertEqual(diagnostic['vertex']['status'],'fewer_than_two_measured_tracks')
+            self.assertEqual(row['components'].shape,(0,12,64,512))
+            self.assertTrue(np.array_equal(row['positive_waveform'],q))
+
     def test_saved_candidate_unknown_finding_is_never_counted_or_scored_as_accepted(self):
         # Synthetic software closure through saved energy -> kinematics ROOT ->
         # final run-summary counts and paired evaluation; no detector claim.

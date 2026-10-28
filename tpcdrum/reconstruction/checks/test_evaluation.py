@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 import numpy as np
 from reconstruction.stage_io import StageWriter,read_stage,manifest,sha256
-from reconstruction.evaluation import evaluate_stage
+from reconstruction.evaluation import evaluate_stage,_fractions
 
 
 class EvaluationTests(unittest.TestCase):
@@ -94,6 +94,96 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(result['summary']['events'],2)
         self.assertEqual(result['summary']['mean_event_charge_l1'],0.)
         self.assertEqual([r['entry'] for r in result['per_event']],[101,102])
+
+    def test_valid_no_track_prediction_is_penalized_but_explicit_failure_is_unscored(self):
+        target=np.zeros((2,12,64,512),np.float32)
+        target[0,:,30,420]=100.;target[1,:,35,424]=50.
+        q=target.sum(0)
+        row=dict(positive_waveform=q,components=np.zeros((0,12,64,512),np.float32),background_waveform=q.copy())
+        ref=dict(truth_components=target,truth_background=np.zeros_like(q))
+        missing=_fractions(row,ref,4)
+        self.assertEqual(missing['charge_l1'],2.)
+        self.assertTrue(missing['charge_l1_defined']);self.assertFalse(missing['finding_failed'])
+        np.testing.assert_array_equal(missing['matched_prediction_index'],[-1,-1])
+        np.testing.assert_array_equal(missing['precision'],[0.,0.])
+        for flag in ({'finding_prediction_available':0},{'finding_failed':1}):
+            failed=_fractions(dict(row,**flag),ref,4)
+            self.assertTrue(failed['finding_failed']);self.assertFalse(failed['charge_l1_defined'])
+            self.assertTrue(np.isnan(failed['charge_l1']));self.assertTrue(np.isnan(failed['absolute_charge_error']))
+            self.assertTrue(np.isnan(failed['precision']).all());self.assertTrue(np.isnan(failed['recall']).all())
+            self.assertFalse(failed['recovered'].any())
+            np.testing.assert_array_equal(failed['true_visible'],[True,True])
+        zero=np.zeros_like(q)
+        m=_fractions(dict(row,positive_waveform=zero,background_waveform=zero),
+            dict(ref,truth_components=np.zeros_like(target)),4)
+        self.assertFalse(m['has_signal']);self.assertFalse(m['finding_failed'])
+        self.assertFalse(m['charge_l1_defined']);self.assertTrue(np.isnan(m['charge_l1']))
+
+    def test_mixed_frozen_root_cohort_keeps_failure_coverage_and_standalone_results(self):
+        # One ambiguous-but-valid prediction, one valid K=0 abstention, and
+        # one failed helper placeholder share an exact predeclared cohort.
+        # The truth file is deliberately larger and stored in another order.
+        target=np.zeros((2,12,64,512),np.float32)
+        target[0,:,30,420]=100.;target[1,:,35,424]=50.;q=target.sum(0)
+        directions=np.array([[0.,1.,0.],[.1,1.,.02]])
+        directions/=np.linalg.norm(directions,axis=1,keepdims=True)
+        vertex=np.array([1.,2.,3.])
+        meta=dict(source_dataset_uuid='mixed-frozen-cohort',source_group_partition_verified=True)
+        obs=self.d/'mixed_obs.root';truth=self.d/'larger_truth.root';out=self.d/'mixed_eval.root'
+        with StageWriter(truth,'truth',dict(meta,role='truth')) as writer:
+            for entry in (99,30,10,20):
+                writer.write(dict(file_index=np.int64(0),entry=np.int64(entry),source_group=np.int64(entry+1000),
+                    truth_components=target,truth_background=np.zeros_like(q),truth_direction_uvw=directions,
+                    truth_vertex_uvw_mm=vertex,truth_kinetic_mev=np.array([10.,11.])))
+        with StageWriter(obs,'vertex',meta) as writer:
+            for entry in (30,20,10,99):
+                valid=entry in (10,99);failed=entry==30
+                # Deliberately stale physical fields must not score a missing
+                # track or failed ancestor as a valid direction/vertex/energy.
+                writer.write(dict(file_index=np.int64(0),entry=np.int64(entry),source_group=np.int64(entry+1000),
+                    positive_waveform=q,components=target[::-1].copy() if valid else np.empty((0,12,64,512),np.float32),
+                    background_waveform=np.zeros_like(q) if valid else q,
+                    finding_prediction_available=np.uint8(not failed),finding_failed=np.uint8(failed),
+                    finding_ambiguous=np.uint8(entry==10),track_directions_uvw=directions[::-1],
+                    fit_ok=np.ones(2,np.uint8),fit_theta_pad_2d_ols_deg=np.degrees(np.arctan2(directions[::-1,0],directions[::-1,1])),
+                    vertex_valid=np.int64(1),vertex_dimension=np.int64(3),vertex_uvw_mm=vertex,
+                    track_vertex_energy_mev=np.array([11.,10.]),energy_ok=np.ones(2,np.uint8)),
+                    dict(fitting=dict(physical_3d=True),vertex=dict(candidate_vertex_mm=vertex.tolist())))
+        result=evaluate_stage(obs,truth,out,self.d/'mixed_eval.json',config={'event_keys':[[0,10],[0,20],[0,30]]})
+        summary=result['summary']
+        self.assertEqual(summary['events'],3);self.assertEqual(summary['positive_charge_events'],3)
+        self.assertEqual(summary['zero_charge_events'],0);self.assertEqual(summary['finding_failed_events'],1)
+        self.assertEqual(summary['prediction_available_events'],2);self.assertEqual(summary['scored_active_events'],2)
+        self.assertEqual(summary['unscored_active_events'],1)
+        self.assertAlmostEqual(summary['active_score_event_coverage'],2/3)
+        self.assertAlmostEqual(summary['pooled_charge_coverage'],2/3)
+        self.assertEqual(summary['mean_event_charge_l1'],1.);self.assertEqual(summary['pooled_charge_l1'],1.)
+        self.assertEqual(summary['all_cohort_positive_charge'],5400.)
+        self.assertEqual(summary['pooled_scored_positive_charge'],3600.)
+        self.assertEqual(summary['visible_reference_slots'],6);self.assertEqual(summary['recovered_visible_slots'],2)
+        self.assertEqual(summary['direction_reference_slots'],6);self.assertEqual(summary['direction_valid_slots'],2)
+        self.assertEqual(summary['vertex_accepted_events'],1);self.assertEqual(summary['energy_valid_slots'],2)
+        obs.unlink();truth.unlink()
+        rows={int(row['entry']):row for row,_ in read_stage(out,allow_truth=True)}
+        self.assertEqual(set(rows),{10,20,30})
+        self.assertEqual(float(rows[10]['charge_l1']),0.)
+        self.assertEqual(float(rows[20]['charge_l1']),2.)
+        self.assertTrue(np.isnan(rows[30]['charge_l1']))
+        for entry in (20,30):
+            row=rows[entry]
+            np.testing.assert_array_equal(row['matched_prediction_index'],[-1,-1])
+            np.testing.assert_array_equal(row['visible_slots'],[1,1])
+            self.assertFalse(row['recovered_slots'].any());self.assertFalse(row['direction_valid'].any())
+            self.assertTrue(np.isnan(row['direction_opening_error_deg']).all())
+            self.assertTrue(np.isnan(row['theta_uv_ols_true_minus_fitted_deg']).all())
+            self.assertFalse(row['vertex_error_valid']);self.assertTrue(np.isnan(row['vertex_error_norm_mm']))
+            self.assertFalse(row['kinetic_energy_valid'].any());self.assertTrue(np.isnan(row['kinetic_energy_error_mev']).all())
+        np.testing.assert_array_equal(rows[20]['soft_precision'],[0.,0.])
+        self.assertTrue(np.isnan(rows[30]['soft_precision']).all())
+        self.assertFalse(rows[20]['finding_failed']);self.assertTrue(rows[30]['finding_failed'])
+        import uproot
+        with uproot.open(out) as source:
+            np.testing.assert_array_equal(source['performance/all_cohort_finding_failed'].values(),[2.,1.])
 
 
 if __name__=='__main__':unittest.main()

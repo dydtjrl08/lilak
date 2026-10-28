@@ -139,37 +139,5 @@
     "Ambiguity retained; zero method-accepted pair recoveries",
     "Full-cohort and common-valid comparison must both be inspected"
   ],
-  "numerical_repair_receipt": {
-    "first_run_terminal_exit_code": 1,
-    "reason": "tiny negative background from IEEE normalized-share sum, minimum -1.1366463326112353e-12 ADC, entry2655",
-    "fix": "nonnegative clipping of rounding-only background; no inference thresholds/model parameters changed",
-    "rerun_cohort_and_config_unchanged": true,
-    "first_run_preserved": "Sequential_failed_float_roundoff/"
-  },
-  "fixed_event_entries": [
-    2655,
-    4340,
-    5379,
-    5469,
-    7310,
-    8593,
-    8611,
-    9561,
-    11844,
-    17051,
-    20199,
-    21459,
-    23680,
-    24481,
-    34263,
-    34315,
-    35838,
-    36385,
-    38661,
-    39678,
-    40549,
-    41384,
-    43484,
-    44070
-  ]
+  "privacy_note": "Historical aggregate rows are unchanged; event identities and individual run receipts are omitted from the public source package. No new study results are added."
 }

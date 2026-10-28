@@ -158,7 +158,12 @@ def run_stage(stage,input_root,output_root,config):
             flags={'fitting':'fit_ok','refitting':'refit_ok','vertex':'vertex_valid','association':'si_association_unique',
                    'material_request':'material_request_valid','material_import':'material_paths_embedded_valid',
                    'energy':'energy_ok','kinematics':'kinematics_method_accepted'}
-            success.append(float(np.all(row[flags[stage]])) if stage in flags else 1.)
+            if stage in flags:
+                stage_flags=np.asarray(row[flags[stage]])
+                # No found tracks is a retained failure event, not a vacuous
+                # all-tracks success. Only explicit success bits count.
+                success.append(float(stage_flags.size>0 and np.all(stage_flags==1)))
+            else:success.append(1.)
             print(stage,'event',i+1,'entry',int(row['entry']),'stage_output_valid',bool(success[-1]),flush=True)
         summary={'events':len(success),'stage_output_valid_fraction':float(np.mean(success)),
                  'elapsed_seconds':time.monotonic()-started,'physics_accuracy_evaluated':0.}

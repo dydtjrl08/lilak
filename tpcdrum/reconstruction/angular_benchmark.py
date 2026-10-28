@@ -12,7 +12,7 @@ import math
 import numpy as np
 
 from .stage_io import StageWriter,read_stage,manifest,sha256,jsonable
-from .evaluation import _reference_index,_fractions
+from .evaluation import _reference_index,_fractions,_prediction_state
 
 STRATA=('observed_drift_gap_tb','observed_shared_pad_fraction',
         'observed_visible_layers_min','observed_charge_imbalance')
@@ -82,22 +82,26 @@ def _attribution(record,reference,c,matching=None):
     """Global matching plus explicit many-to-one/one-to-many diagnostics."""
     target=np.asarray(reference['truth_components'],float)
     kt=len(target)
+    state=_prediction_state(record)
     if 'components' not in record:
         # A previous compact evaluation ROOT can be summarized, but cannot
         # reconstruct cross-slot merge/split information it did not store.
         if not {'matched_prediction_index','soft_precision','soft_recall'}<=set(record):
             raise ValueError('Method needs finding components or explicit compact paired-evaluation matching/purity/recall')
         match=np.asarray(record['matched_prediction_index'],int)
-        if matching is not None and not np.array_equal(match,matching):
+        if state['prediction_available'] and matching is not None and not np.array_equal(match,matching):
             raise ValueError('Compact after evaluation uses a different alpha permutation')
         if match.shape!=(kt,):raise ValueError('Invalid compact matching')
         precision=np.asarray(record.get('soft_precision',np.zeros(kt)),float)[:kt]
         recall=np.asarray(record.get('soft_recall',np.zeros(kt)),float)[:kt]
         visible=(target.sum((2,3))>c['layer_charge_threshold']).sum(1)>=c['minimum_visible_layers']
+        if not state['prediction_available']:
+            match=np.full(kt,-1,dtype=np.int64)
+            precision=np.full(kt,np.nan);recall=np.full(kt,np.nan)
         good=visible&(match>=0)&(precision>=c['purity_min'])&(recall>=c['recall_min'])
         return dict(matching=match,precision=precision,recall=recall,visible=visible,good=good,
             merge=np.zeros((kt,kt),bool),split=np.zeros(kt,bool),structural_metrics_known=False,
-            components=None,charge_l1=float(record.get('charge_l1',np.nan)))
+            components=None,charge_l1=float(record.get('charge_l1',np.nan)) if state['prediction_available'] else np.nan,**state)
     pred=np.asarray(record['components'],float)
     if pred.ndim!=4 or target.ndim!=4 or pred.shape[1:]!=(12,64,512) or target.shape[1:]!=pred.shape[1:]:
         raise ValueError('Attribution requires embedded native component waveforms')
@@ -115,12 +119,8 @@ def _attribution(record,reference,c,matching=None):
     if not np.allclose(pred.sum(0)+bg,q,atol=2e-6*scale,rtol=2e-6) or not np.allclose(target.sum(0)+truth_bg,q,atol=2e-6*scale,rtol=2e-6):
         raise ValueError('Observation/prediction/reference charge closure differs')
     if matching is None:
-        if kp:
-            base=_fractions(record,reference,int(c['tb_bin']))
-            matching=base['matched_prediction_index'];charge_l1=base['charge_l1']
-        else:
-            matching=np.full(kt,-1)
-            charge_l1=float((target.sum()+np.abs(bg-truth_bg).sum())/max(float(q.sum()),1e-12))
+        base=_fractions(record,reference,int(c['tb_bin']))
+        matching=base['matched_prediction_index'];charge_l1=base['charge_l1']
     else:
         matching=np.asarray(matching,int)
         if matching.shape!=(kt,):raise ValueError('Invalid fixed matching shape')
@@ -141,6 +141,10 @@ def _attribution(record,reference,c,matching=None):
     true_layers=(target.sum((2,3))>c['layer_charge_threshold']).sum(1)
     pred_layers=(pred.sum((2,3))>c['layer_charge_threshold']).sum(1)
     visible=true_layers>=c['minimum_visible_layers']
+    if not state['prediction_available']:
+        return dict(matching=np.full(kt,-1,dtype=np.int64),precision=np.full(kt,np.nan),recall=np.full(kt,np.nan),
+            visible=visible,good=np.zeros(kt,bool),merge=np.zeros((kt,kt),bool),split=np.zeros(kt,bool),
+            structural_metrics_known=False,components=pred,charge_l1=np.nan,**state)
     precision=np.zeros(kt);recall=np.zeros(kt);good=np.zeros(kt,bool)
     for j,i in enumerate(match):
         if i<0:continue
@@ -160,7 +164,7 @@ def _attribution(record,reference,c,matching=None):
                 by_recall[i,j]>=c['split_recall_min'] and by_precision[i,j]>=c['split_purity_min']]
         split[j]=len(pieces)>=2
     return dict(matching=match,precision=precision,recall=recall,visible=visible,good=good,
-        merge=merge,split=split,structural_metrics_known=True,components=pred,charge_l1=charge_l1)
+        merge=merge,split=split,structural_metrics_known=True,components=pred,charge_l1=charge_l1,**state)
 
 
 def _aligned(values,matching,width=None):
@@ -195,6 +199,7 @@ def _errors(record,diagnostic,reference,matching,c):
     kt=len(matching);truth_direction=np.asarray(reference['truth_direction_uvw'],float)
     theta=np.degrees(np.arctan2(truth_direction[:,0],truth_direction[:,1]))
     values={name:np.full(kt if name.startswith('theta') else 1,np.nan) for name in ERROR_FIELDS}
+    if not _prediction_state(record)['prediction_available'] or not np.any(np.asarray(matching)>=0):return values
     physical=diagnostic.get('fitting',{}).get('physical_3d') is True or bool(record.get('physical_3d',False))
     direction=_aligned(record.get('track_directions_uvw',[]),matching,3)
     if physical:
@@ -260,7 +265,8 @@ def event_result(before,before_diagnostic,reference,after=None,after_diagnostic=
     same=(after if after is not None else before)
     same_model=False
     same_vertex_comparison=False
-    if c['prefer_joint_same_model_theta'] and 'vertex_free_theta_uv_deg' in same and 'vertex_joint_theta_uv_deg' in same:
+    usable_same=_prediction_state(same)['prediction_available'] and np.any(np.asarray(b['matching'])>=0)
+    if usable_same and c['prefer_joint_same_model_theta'] and 'vertex_free_theta_uv_deg' in same and 'vertex_joint_theta_uv_deg' in same:
         free=_aligned(same['vertex_free_theta_uv_deg'],b['matching'])
         joint=_aligned(same['vertex_joint_theta_uv_deg'],b['matching'])
         valid=_aligned(np.asarray(same.get('vertex_joint_comparison_valid',[]),float),b['matching'])==1
@@ -268,7 +274,7 @@ def event_result(before,before_diagnostic,reference,after=None,after_diagnostic=
         ae['theta_2d']=np.where(valid,_wrap(joint-theta),np.nan)
         same_model=True
         if after is None:ae['vertex_2d']=_errors(before,before_diagnostic,reference,b['matching'],c)['vertex_2d']
-    if 'vertex_free_projected_uv_mm' in same:
+    if usable_same and 'vertex_free_projected_uv_mm' in same:
         target=np.asarray(reference.get('truth_vertex_uvw_mm',[]),float)
         free=np.asarray(same['vertex_free_projected_uv_mm'],float)
         be['vertex_2d']=np.full(1,np.nan)
@@ -285,8 +291,10 @@ def event_result(before,before_diagnostic,reference,after=None,after_diagnostic=
         available=bool(out['phase_available'][0 if phase=='before' else 1])
         confidence_record=before if phase=='before' else (after if after is not None else before)
         confidence_diag=before_diagnostic if phase=='before' else (after_diagnostic if after is not None else before_diagnostic)
-        ambiguous=_method_confidence(confidence_record,confidence_diag or {}) if available else -1
+        ambiguous=_method_confidence(confidence_record,confidence_diag or {}) if available and score['prediction_available'] else -1
         out['pair_recovered_'+phase]=np.array([bool(score['good'][i] and score['good'][j] and score['matching'][i]!=score['matching'][j]) for i,j in pairs],np.uint8)
+        out['pair_method_failed_'+phase]=np.full(len(pairs),score['finding_failed'],np.uint8)
+        out['pair_prediction_available_'+phase]=np.full(len(pairs),score['prediction_available'],np.uint8)
         out['pair_method_ambiguous_'+phase]=np.full(len(pairs),ambiguous,dtype=np.int64)
         out['pair_method_confidence_assessed_'+phase]=np.full(len(pairs),ambiguous>=0,dtype=np.uint8)
         out['pair_accepted_recovered_'+phase]=(out['pair_recovered_'+phase]&(ambiguous==0)&available).astype(np.uint8)
@@ -359,10 +367,11 @@ class AngularAccumulator:
                     for phase in ('before','after'):
                         available=bool(row.get('phase_available',np.ones((len(self.methods),2)))[m,0 if phase=='before' else 1])
                         for flag in ('pair_recovered','pair_merge','pair_fake_split',
-                                     'pair_accepted_recovered','pair_method_ambiguous','pair_method_confidence_assessed'):
+                                     'pair_accepted_recovered','pair_method_ambiguous','pair_method_confidence_assessed',
+                                     'pair_method_failed','pair_prediction_available'):
                             assessed=bool(row.get('pair_method_confidence_assessed_'+phase,np.zeros_like(row['pair_recovered_'+phase]))[m,p])
                             if flag=='pair_method_ambiguous':known=available and assessed
-                            elif flag in ('pair_recovered','pair_accepted_recovered','pair_method_confidence_assessed'):known=available
+                            elif flag in ('pair_recovered','pair_accepted_recovered','pair_method_confidence_assessed','pair_method_failed','pair_prediction_available'):known=available
                             else:known=available and bool(row['structural_known_'+phase][m,p])
                             if known:
                                 key=flag+'_'+phase
@@ -390,7 +399,7 @@ class AngularAccumulator:
                 row['phase_available_'+phase+'_pair_count']=available
                 row['phase_available_'+phase+'_fraction']=available/b['eligible_pairs'] if b['eligible_pairs'] else np.nan
                 for flag in ('pair_recovered','pair_merge','pair_fake_split','pair_accepted_recovered',
-                             'pair_method_ambiguous','pair_method_confidence_assessed'):
+                             'pair_method_ambiguous','pair_method_confidence_assessed','pair_method_failed','pair_prediction_available'):
                     key=flag+'_'+phase;s=b['counts'].get(key,0);n=b['counts'].get(key+'_denom',0)
                     rate,low,high=wilson(s,n,float(self.config['wilson_z']))
                     row.update({key+'_count':s,key+'_denominator':n,key+'_fraction':rate,key+'_wilson_low':low,key+'_wilson_high':high})

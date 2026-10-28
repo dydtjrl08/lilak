@@ -1,146 +1,17 @@
 {
-  "scope": "Small old-MC algorithm pilot; not new-DDE detector accuracy",
-  "source_file": "C12_72MeV_3C3_digi.root",
-  "source_events": 44211,
-  "has_observed_si_energy": false,
-  "training_config": {
-    "k": 3,
-    "tb_bin": 4,
-    "width": 8,
-    "batch_size": 1,
-    "workers": 0,
-    "epochs": 5,
-    "device": "cpu",
-    "seed": 20261027,
-    "dropout": 0.05,
-    "learning_rate": 0.0003,
-    "early_stop_patience": 10,
-    "progress_every": 5
-  },
-  "selected_epoch": 3,
-  "best_validation_loss": 1.1026109286717005,
-  "test_pit_loss_once": 1.2351608106068201,
-  "split_event_entries": {
-    "train": [
-      940,
-      2821,
-      3762,
-      4703,
-      8465,
-      9406,
-      10347,
-      11287,
-      12228,
-      14109,
-      15050,
-      16931,
-      17872,
-      18812,
-      19753,
-      20694,
-      21634,
-      26337,
-      27278,
-      28219,
-      29159,
-      30100,
-      31041,
-      34803,
-      35744,
-      36684,
-      37625,
-      38566,
-      39506,
-      40447,
-      41388,
-      42328,
-      43269,
-      44210
-    ],
-    "validation": [
-      0,
-      1881,
-      5643,
-      7525,
-      25397,
-      31981,
-      33862
-    ],
-    "test": [
-      6584,
-      13168,
-      15990,
-      22575,
-      23515,
-      24456,
-      32922
-    ]
-  },
-  "model_sha256": "480b1cf5eeb41730f9021cd4d150e8ac4907b484521753927d89b25a39ce1957",
-  "model_size_bytes": 1221099,
-  "comparison": {
-    "cnn": {
-      "N_events": 7,
-      "mean_event_charge_l1": 1.1610526179677816,
-      "pooled_charge_l1": 1.19267648264804,
-      "mean_event_overlap_fraction_mae": 0.2461785008951045,
-      "overlap_events": 5,
-      "recovered_visible_slots": 2,
-      "true_visible_slots": 20
-    },
-    "hough": {
-      "N_events": 7,
-      "mean_event_charge_l1": 0.8280817881235721,
-      "pooled_charge_l1": 0.8396690581794093,
-      "mean_event_overlap_fraction_mae": 0.29677704940038263,
-      "overlap_events": 5,
-      "recovered_visible_slots": 14,
-      "true_visible_slots": 20
-    },
-    "ransac": {
-      "N_events": 7,
-      "mean_event_charge_l1": 0.7640226352047584,
-      "pooled_charge_l1": 0.7414009588107928,
-      "mean_event_overlap_fraction_mae": 0.2934306917098656,
-      "overlap_events": 5,
-      "recovered_visible_slots": 15,
-      "true_visible_slots": 20
-    },
-    "tls": {
-      "N_events": 7,
-      "mean_event_charge_l1": 1.6274035565382923,
-      "pooled_charge_l1": 1.6352683990312191,
-      "mean_event_overlap_fraction_mae": 0.328380440486474,
-      "overlap_events": 5,
-      "recovered_visible_slots": 2,
-      "true_visible_slots": 20
-    },
-    "cnn_hough": {
-      "N_events": 7,
-      "mean_event_charge_l1": 0.7217315648791891,
-      "pooled_charge_l1": 0.7291807440704882,
-      "mean_event_overlap_fraction_mae": 0.2984690134311293,
-      "overlap_events": 5,
-      "recovered_visible_slots": 13,
-      "true_visible_slots": 20
-    },
-    "waveform_hypotheses": {
-      "N_events": 7,
-      "mean_event_charge_l1": 1.061724534807143,
-      "pooled_charge_l1": 1.0975718313615634,
-      "mean_event_overlap_fraction_mae": 0.19089894878120078,
-      "overlap_events": 5,
-      "recovered_visible_slots": 10,
-      "true_visible_slots": 20
-    }
-  },
+  "scope": "Generic public source package; historical pilot details are retained separately",
+  "status": "user_data_and_research_results_not_included",
+  "dataset_identities_included": false,
+  "split_event_indices_included": false,
+  "checkpoint_hashes_or_weights_included": false,
+  "calibration_metadata_or_coefficients_included": false,
+  "performance_results_included": false,
   "physics_accuracy_validated": false,
-  "limitations": [
-    "7 test events only",
-    "5-epoch width8 CNN is not optimized",
-    "Source identity within one old file; no cross-file UUID guarantee",
-    "No observed Si energies in old3C3",
-    "No 120degree constraint",
-    "No new-DDE end-to-end precision result"
+  "usage": "Supply your own observation ROOT, source-group split and trained checkpoint explicitly. Evaluate every frozen test case and retain failure and score coverage.",
+  "limits": [
+    "Synthetic software checks do not establish detector accuracy",
+    "An observed-waveform decomposition is not proof of unique physical identifiability",
+    "Physical trajectories, Si energy inversion and mass correlations require separately validated inputs",
+    "No 120-degree or equal-energy constraint is imposed on reconstruction"
   ]
 }

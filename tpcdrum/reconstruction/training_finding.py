@@ -258,7 +258,9 @@ def separation_metrics(predicted_fractions,truth_fractions,charge,overlap_charge
     if np.any(pred<0) or np.any(truth<0) or np.any(charge<0):raise ValueError('Negative metric inputs')
     if not np.allclose(pred.sum(0),1.,atol=2e-5) or not np.allclose(truth.sum(0),1.,atol=2e-5):
         raise ValueError('Metrics require true simplexes, background last')
-    k=pred.shape[0]-1;denom=max(float(charge.sum()),1e-12)
+    k=pred.shape[0]-1;denom=float(charge.sum())
+    if not 1<=k<=6 or not np.isfinite(denom):raise ValueError('Need K in [1,6] and finite observed charge sum')
+    has_charge=denom>0.
     best=min(permutations(range(k)),key=lambda perm:float((np.abs(pred[list(perm)+[k]]-truth)*charge[None]).sum()))
     aligned=pred[list(best)+[k]]
     error=np.abs(aligned-truth)*charge[None]
@@ -272,24 +274,219 @@ def separation_metrics(predicted_fractions,truth_fractions,charge,overlap_charge
     reco_layers=(recoq.sum((2,3))>overlap_charge_threshold).sum(1)
     visible=true_layers>=min_visible_layers
     recovered=visible&(precision>=.5)&(recall>=.5)&(reco_layers>=min_visible_layers)
-    return dict(charge_l1=float(error.sum()/denom),absolute_charge_error=float(error.sum()),positive_charge=denom,
+    if not has_charge:
+        precision[:]=np.nan;recall[:]=np.nan
+    return dict(charge_l1=float(error.sum()/denom) if has_charge else float('nan'),
+                charge_l1_defined=has_charge,event_has_positive_charge=has_charge,zero_charge=not has_charge,
+                true_visible_count=int(visible.sum()),nonzero_low_visible=bool(has_charge and visible.sum()<k),
+                absolute_charge_error=float(error.sum()),positive_charge=denom,
                 overlap_fraction_mae=overlap_mae,overlap_voxels=int(overlap.sum()),slot_permutation=list(best),
                 precision=precision,recall=recall,true_visible=visible,recovered=recovered,
                 true_layers=true_layers,reco_layers=reco_layers,aligned_fractions=aligned.astype(np.float32))
 
 
-def evaluate_finding_comparison(manifest,split_manifest,checkpoint,output_root,output_json,config=None):
-    """Evaluate frozen methods on the SAME predeclared heldout source groups.
+def _finding_coverage_summary(values, expected_k):
+    """Fixed-cohort counts plus explicitly conditional charge metrics.
 
-    All inference calls get observed waveforms alone. Truth is used afterwards
-    only in this evaluation process, whose ROOT role=evaluation prevents downstream
-    reuse as a reconstruction observation stage. No network optimization or
-    hyperparameter retuning; per-event hypothesis fitting is observation-only.
+    A missing prediction is not replaced by a perfect or background-only score.
+    The pooled denominator includes only positive-charge events with a defined
+    prediction; its charge/event coverage relative to ALL frozen cases is kept.
     """
+    count=len(values)
+    active=[v for v in values if v['positive_charge']>0]
+    scored=[v for v in active if v.get('charge_l1_defined',np.isfinite(v['charge_l1'])) and np.isfinite(v['charge_l1'])]
+    overlap=[v['overlap_fraction_mae'] for v in values if np.isfinite(v['overlap_fraction_mae'])]
+    numerator=float(sum(v['absolute_charge_error'] for v in scored))
+    denominator=float(sum(v['positive_charge'] for v in scored))
+    total_charge=float(sum(v['positive_charge'] for v in values))
+    nvisible=[int(v.get('true_visible_count',np.count_nonzero(v['true_visible']))) for v in values]
+    visible_counts={str(k):sum(n==k for n in nvisible) for k in range(expected_k+1)}
+    visible_slots=int(sum(np.count_nonzero(v['true_visible']) for v in values))
+    recovered_slots=int(sum(np.count_nonzero(v['recovered']) for v in values))
+    failure=sum(bool(v.get('method_failed',False)) for v in values)
+    ambiguous=sum(bool(v.get('ambiguity_assessment_known',False)) and bool(v.get('method_ambiguous',True)) for v in values)
+    unknown=sum(not bool(v.get('ambiguity_assessment_known',False)) for v in values)
+    declared=sum(bool(v.get('method_declaration_success',False)) for v in values)
+    active_mean=float(np.mean([v['charge_l1'] for v in scored])) if scored else None
+    angular=np.concatenate([np.asarray(v.get('initial_minus_component_centroid_ols_theta_error_deg',[]),float) for v in values]) if values else np.empty(0)
+    angular=angular[np.isfinite(angular)]
+    pair_visible=sum(int(np.count_nonzero(v.get('pair_reference_visible',[]))) for v in values)
+    pair_recovered=sum(int(np.count_nonzero(v.get('pair_recovered',[]))) for v in values)
+    strata=dict(zero_charge=sum(v['positive_charge']==0 for v in values),
+        positive_charge_zero_visible=sum(v['positive_charge']>0 and n==0 for v,n in zip(values,nvisible)),
+        positive_charge_partially_visible=sum(v['positive_charge']>0 and 0<n<expected_k for v,n in zip(values,nvisible)),
+        positive_charge_all_visible=sum(v['positive_charge']>0 and n==expected_k for v,n in zip(values,nvisible)))
+    return dict(N_events=count,fixed_cohort_events=count,positive_charge_events=len(active),
+        active_events=len(active),zero_charge_events=count-len(active),
+        nonzero_low_visible_events=sum(v['positive_charge']>0 and n<expected_k for v,n in zip(values,nvisible)),
+        visibility_count_events=visible_counts,exclusive_charge_visibility_strata=strata,
+        mean_active_event_charge_l1=active_mean,mean_event_charge_l1=active_mean,
+        mean_event_charge_l1_scope='compatibility alias for positive-charge events with defined predictions; zero/failed scores excluded',
+        scored_active_events=len(scored),unscored_active_events=len(active)-len(scored),
+        active_score_event_coverage=len(scored)/len(active) if active else None,
+        pooled_charge_l1=numerator/denominator if denominator>0 else None,
+        pooled_absolute_charge_error=numerator,pooled_scored_positive_charge=denominator,
+        all_cohort_positive_charge=total_charge,
+        pooled_charge_coverage=denominator/total_charge if total_charge>0 else None,
+        mean_event_overlap_fraction_mae=float(np.mean(overlap)) if overlap else None,overlap_events=len(overlap),
+        recovered_visible_slots=recovered_slots,true_visible_slots=visible_slots,
+        recovered_visible_slot_fraction=recovered_slots/visible_slots if visible_slots else None,
+        method_failed_events=int(failure),ambiguous_events=int(ambiguous),ambiguity_unknown_events=int(unknown),
+        method_declaration_success_events=int(declared),
+        method_declaration_success_fraction_all_cohort=declared/count if count else None,
+        all_truth_slots_recovered_events=sum(bool(np.all(v['recovered'])) and v['positive_charge']>0 for v in values),
+        fixed_all_reference_slots=count*expected_k,
+        component_centroid_ols_valid_slots=sum(int(np.count_nonzero(v.get('component_centroid_ols_valid',[]))) for v in values),
+        paired_initial_theta_error_slots=len(angular),
+        initial_theta_error_slot_coverage=len(angular)/(count*expected_k) if count and expected_k else None,
+        conditional_initial_minus_component_centroid_ols_theta_bias_deg=float(angular.mean()) if len(angular) else None,
+        conditional_initial_minus_component_centroid_ols_theta_std_deg=float(angular.std(ddof=0)) if len(angular) else None,
+        conditional_initial_minus_component_centroid_ols_theta_rmse_deg=float(np.sqrt(np.mean(angular**2))) if len(angular) else None,
+        angular_diagnostic_scope='whole found-component centroid OLS, peak>40ADC on >=3 observed layers, then evaluation charge-PIT alignment; initial-vs-observed transport difference included; projected u-v only, no physical 3D drift claim',
+        angular_std_definition='population RMS about conditional mean; descriptive, not SEM or calibrated precision',
+        fixed_all_reference_pairs=count*expected_k*(expected_k-1)//2,
+        reference_visible_pairs=pair_visible,recovered_reference_visible_pairs=pair_recovered,
+        recovered_reference_visible_pair_fraction=pair_recovered/pair_visible if pair_visible else None,
+        positive_charge_definition='sum of observed positive ADC > 0; not a visibility or physical acceptance claim',
+        declaration_scope='non-ambiguous supported method declaration, not an independently validated reconstruction probability')
+
+
+def _finding_observation_record(record):
+    # Explicit allowlist: provenance/MC tags/truth/Si alpha energies and upstream
+    # diagnostics cannot become sequential-finding inputs through this evaluator.
+    names=('positive_waveform','tb_ns','points_uvw_mm','point_covariance_mm2',
+           'point_charge','point_tb','point_layer','point_pad','physical_3d',
+           'baseline','noise_sigma')
+    return {name:record[name] for name in names if name in record}
+
+
+def _evaluation_fractions(found, k, shape):
+    fractions=np.asarray(found['fractions'],dtype=float)
+    if fractions.ndim!=4 or fractions.shape[1:]!=shape or not 0<=len(fractions)-1<=k:
+        raise ValueError('Finding returned unsupported slot count or coarse geometry')
+    if len(fractions)==k+1:return fractions
+    # A competing smaller-K hypothesis gets zero dummy alpha slots, while its
+    # background stays last. This does not force the method to find all K tracks.
+    padded=np.zeros((k+1,*shape));padded[:len(fractions)-1]=fractions[:-1];padded[-1]=fractions[-1]
+    return padded
+
+
+def _annotate_finding_score(metric,diagnostics,prediction_valid):
+    known=isinstance(diagnostics.get('ambiguous'),(bool,np.bool_))
+    ambiguous=bool(diagnostics.get('ambiguous',True))
+    status=str(diagnostics.get('status','missing_assessment'))
+    failed=(not prediction_valid or bool(diagnostics.get('optimization_incomplete',False))
+        or diagnostics.get('optimizer_success') is False or status.startswith('invalid_') or status.endswith('_failed'))
+    supported=status in ('hypothesis_supported_NOT_physics_validated',
+                        'sequential_observation_hypothesis_supported_NOT_physics_validated')
+    metric.update(prediction_valid=bool(prediction_valid),method_failed=bool(failed),
+        method_ambiguous=ambiguous,ambiguity_assessment_known=known,method_status=status,
+        method_declaration_success=bool(metric['positive_charge']>0 and prediction_valid and not failed and known and not ambiguous and supported))
+    if not prediction_valid:
+        metric.update(charge_l1=float('nan'),charge_l1_defined=False,absolute_charge_error=0.,
+                      overlap_fraction_mae=float('nan'),precision=np.full_like(metric['precision'],np.nan),
+                      recall=np.full_like(metric['recall'],np.nan),recovered=np.zeros_like(metric['recovered']),
+                      reco_layers=np.zeros_like(metric['reco_layers']),slot_permutation=[-1]*len(metric['recovered']))
+    return metric
+
+
+def _reference_projected_angles(label,k):
+    """Evaluation-only initial projected angles; no physical-z reconstruction."""
+    angles=np.full(k,np.nan);valid=np.zeros(k,bool)
+    pairs=np.asarray([(a,b) for a in range(k) for b in range(a+1,k)],dtype=np.int64).reshape(-1,2)
+    try:directions=np.asarray(label.get('truth_direction_uvw'),dtype=float)
+    except (TypeError,ValueError):directions=np.empty((0,3))
+    if directions.shape==(k,3):
+        valid=np.isfinite(directions).all(1)&(np.linalg.norm(directions[:,:2],axis=1)>0)
+        angles[valid]=np.degrees(np.arctan2(directions[valid,0],directions[valid,1]))
+    pair_delta=np.full(len(pairs),np.nan)
+    for j,(a,b) in enumerate(pairs):
+        if valid[a] and valid[b]:pair_delta[j]=abs((angles[a]-angles[b]+180.)%360.-180.)
+    return dict(initial_theta_pad_deg=angles,valid=valid,pair_indices=pairs,pair_delta_theta_pad_deg=pair_delta,
+                status='ok' if np.all(valid) else 'missing_or_invalid_initial_direction_reference')
+
+
+def _component_centroid_ols_angles(found,k,permutation,prediction_valid):
+    """Observed components -> centroids -> OLS, then evaluation slot alignment.
+
+    Fixed BEFORE optimization: component layer peak >40 ADC, >=3 such layers.
+    Every positive pad/TB contribution enters its layer centroid. No MC-selected
+    hits, timing conversion, refit, vertex/120-degree constraint or truth angle
+    enters this diagnostic. The charge-PIT permutation is evaluation-only.
+    """
+    from .preprocessing import PAD_U_MM,LAYER_V_MM
+    angles=np.full(k,np.nan);layers=np.zeros(k,dtype=np.int64)
+    result=dict(theta_pad_deg=angles,valid=np.zeros(k,bool),active_layers=layers,
+                status='prediction_unavailable',min_observed_layers=3,component_layer_peak_adc_strict=40.)
+    if not prediction_valid:return result
+    if not isinstance(found,dict) or 'components' not in found:
+        result['status']='missing_full_observed_components';return result
+    try:components=np.asarray(found['components'],dtype=float)
+    except (TypeError,ValueError):
+        result['status']='invalid_full_observed_components';return result
+    if (components.ndim!=4 or components.shape[1:]!=(12,64,512) or
+            not 0<=len(components)<=k or not np.isfinite(components).all() or np.any(components<0)):
+        result['status']='invalid_full_observed_components';return result
+    perm=np.asarray(permutation,dtype=int)
+    if perm.shape!=(k,) or sorted(perm.tolist())!=list(range(k)):
+        result['status']='invalid_evaluation_charge_permutation';return result
+    for slot,component in enumerate(components):
+        pad_charge=component.sum(axis=2)
+        charge=pad_charge.sum(axis=1)
+        active=(component.max(axis=(1,2))>40.)&(charge>0)
+        layers[slot]=int(active.sum())
+        if layers[slot]<3:continue
+        u=(pad_charge[active]@PAD_U_MM)/charge[active]
+        v=LAYER_V_MM[active];center=float(v.mean());dv=v-center
+        denominator=float(dv@dv)
+        if denominator<=0:continue
+        slope=float(dv@(u-u.mean())/denominator)
+        angles[slot]=np.degrees(np.arctan(slope))
+    result.update(theta_pad_deg=angles[perm].copy(),active_layers=layers[perm].copy(),
+                  valid=np.isfinite(angles[perm]),status='ok' if np.isfinite(angles).any() else 'insufficient_observed_component_layers')
+    return result
+
+
+def _comparison_output_paths(manifest,split_manifest,checkpoint,output_root,output_json,methods,observation_outputs):
+    """Preflight paths before opening ROOT inputs or starting any writer."""
+    from collections.abc import Mapping
+    def resolved(value):return Path(value).expanduser().resolve()
+    inputs=[resolved(manifest['observations_root']),resolved(manifest['truth_root']),
+            resolved(split_manifest),resolved(checkpoint)]
+    if len(set(inputs))!=len(inputs):raise ValueError('Comparison input roles must have distinct paths')
+    root,json_path=resolved(output_root),resolved(output_json)
+    outputs={}
+    if observation_outputs is not None:
+        if not isinstance(observation_outputs,Mapping) or set(observation_outputs)!=set(methods):
+            raise ValueError('observation_outputs must match the complete configured method set')
+        outputs={method:resolved(observation_outputs[method]) for method in methods}
+    targets=[root,json_path]+list(outputs.values())
+    if len(set(targets))!=len(targets) or set(targets)&set(inputs):
+        raise ValueError('Comparison/handoff output paths collide with input or output roles')
+    for path in targets:
+        if path.exists() or path.is_symlink():raise FileExistsError(path)
+    return root,json_path,outputs
+
+
+def evaluate_finding_comparison(manifest,split_manifest,checkpoint,output_root,output_json,config=None,*,observation_outputs=None):
+    """Evaluate every frozen event, including zero-charge and low-visible cases.
+
+    Inference is observation-only. Truth is used only after prediction, in this
+    evaluation process. Failed method calls remain in fixed-cohort coverage with
+    undefined scores; no optimizer/model/dataset-cache behavior is changed here.
+    observation_outputs optionally publishes independent observation-only finding
+    ROOT files from these SAME predictions; no second inference or truth alignment.
+    """
+    from contextlib import ExitStack
     from .stage_io import StageWriter,read_stage,manifest as stage_manifest,sha256,jsonable
     from .algorithms.finding import find_event
     from .evaluation import _reference_index
-    cfg=dict(config or {});split=json.loads(Path(split_manifest).read_text())
+    cfg=dict(config or {})
+    methods=list(cfg.get('methods',['cnn','hough','ransac','tls','cnn_hough','waveform_hypotheses']))
+    if not methods or len(set(methods))!=len(methods):raise ValueError('Methods must be nonempty and unique')
+    output_root,output_json,handoff_paths=_comparison_output_paths(manifest,split_manifest,checkpoint,
+        output_root,output_json,methods,observation_outputs)
+    split=json.loads(Path(split_manifest).read_text())
     selected={(int(r['file_index']),int(r['entry'])) for r in split['test']}
     if not selected:raise ValueError('No predeclared test events')
     if any(selected&{(int(r['file_index']),int(r['entry'])) for r in split[name]} for name in ('train','validation')):
@@ -301,19 +498,35 @@ def evaluate_finding_comparison(manifest,split_manifest,checkpoint,output_root,o
     if obs_meta.get('role')=='truth' or truth_meta.get('role')!='truth':raise ValueError('Observation/truth roles reversed')
     labels=_reference_index(manifest['truth_root'])
     if not selected<=set(labels):raise ValueError('Missing frozen-test truth events')
-    methods=list(cfg.get('methods',['cnn','hough','ransac','tls','cnn_hough','waveform_hypotheses']))
-    output_json=Path(output_json)
-    if output_json.exists():raise FileExistsError(output_json)
     per_event=[];method_results={m:[] for m in methods}
     metainfo=dict(role='evaluation',evaluation_only=True,methods=methods,source_dataset_uuid=manifest['source_dataset_uuid'],
         checkpoint=str(Path(checkpoint).resolve()),checkpoint_sha256=sha256(checkpoint),split_manifest_sha256=sha256(split_manifest),
-        original_source_partition_verified=bool(obs_meta.get('source_group_partition_verified',False)),
-        evaluation_scope='Small old-MC heldout charge-attribution benchmark; not new DDE or physical 3D/energy/vertex accuracy',
-        metric_definitions=dict(charge_l1='sum abs(predicted observed attributed charge - MC-tag attributed charge), including background / observed positive sum; may exceed 1',
+        fixed_cohort_events=len(selected),original_source_partition_verified=bool(obs_meta.get('source_group_partition_verified',False)),
+        evaluation_scope='Frozen old-MC heldout charge-attribution benchmark; not new DDE or physical 3D/energy/vertex accuracy',
+        metric_definitions=dict(charge_l1='sum absolute attributed-charge error including background / actual observed positive sum; undefined at zero charge; may exceed 1',
+             mean_active_event_charge_l1='conditional on positive observed charge AND defined prediction; score event/charge coverage reported separately',
+             pooled_charge_l1='sum finite scored error numerator / scored positive observed charge; None if denominator zero; failures retained in full-cohort counts',
+             observed_positive_charge='actual sum, including exactly zero; never a clamped denominator',
+             visibility_count_events='ALL frozen events, including zero charge; visible slots require >=2 layers each >40 ADC*TB',
              overlap_fraction_mae='alpha-slot mean absolute fractions on true >=2 fractions >0.1, coarse charge >40 ADC*TB',
-             recovered='visible >=2 layers above40ADC*TB, soft precision/recall>=.5 and recovered>=2layers; conditional criterion'),
+             recovered='visible >=2 layers above40ADC*TB, soft precision/recall>=.5 and recovered>=2layers; conditional criterion',
+             method_declaration_success='positive charge plus non-ambiguous supported method declaration; not physical reconstruction accuracy'),
+        angular_diagnostic=dict(method='observed component layer-centroid OLS u(v)',min_observed_layers=3,strict_component_layer_peak_adc=40.,
+            target='separate truth initial theta_pad = atan2(direction_u,direction_v)',
+            alignment='same evaluation charge-PIT permutation; zero-padded absent tracks remain NaN',
+            residual='wrapped true_initial - component_centroid_OLS degrees; contains initial/local transport difference',
+            physical_3d=False,truth_used_for_hit_selection=False,truth_available_only_in_evaluation_output=True),
         physics_accuracy_evaluated=False,config=cfg)
-    with StageWriter(output_root,'finding_evaluation',metainfo) as writer:
+    metainfo['observation_outputs']={method:str(path) for method,path in handoff_paths.items()}
+    maximum_k=None
+    with ExitStack() as contexts:
+        writer=contexts.enter_context(StageWriter(output_root,'finding_evaluation',metainfo))
+        handoff=None
+        if handoff_paths:
+            from .finding_handoff import FindingHandoff
+            handoff=contexts.enter_context(FindingHandoff(handoff_paths,obs_meta,config=cfg,
+                checkpoint_sha256=metainfo['checkpoint_sha256'],
+                split_manifest_sha256=metainfo['split_manifest_sha256']))
         for record,diagnostic in read_stage(manifest['observations_root']):
             key=int(record['file_index']),int(record['entry'])
             if key not in selected:continue
@@ -323,25 +536,104 @@ def evaluate_finding_comparison(manifest,split_manifest,checkpoint,output_root,o
             if (int(label['file_index']),int(label['entry']))!=key or int(label['source_group'])!=source_group:
                 raise ValueError('Reference row changed after scalar indexing')
             k=int(label['truth_components'].shape[0]);tb=int(cfg.get('tb_bin',truth_meta.get('tb_bin',4)))
+            if maximum_k is None:maximum_k=k
+            if k!=maximum_k:raise ValueError('Fixed-cohort finding benchmark requires the same declared maximum K per event')
             charge=q.reshape(12,64,512//tb,tb).sum(-1)
             truth=np.concatenate((label['truth_components'],label['truth_background'][None])).reshape(k+1,12,64,512//tb,tb).sum(-1)
             truth=np.divide(truth,charge[None],out=np.zeros_like(truth),where=charge[None]>0)
             truth[-1,charge==0]=1.
+            # Reference scoring is deferred until after a fresh observation
+            # handoff, so no truth-PIT/visibility/angle annotation can precede it.
+            reference_metric=None;reference_angles=None
             probabilities=[];scores=[];diags={};timings=[]
             for method in methods:
                 inference_cfg=dict(cfg.get('finding',{}),k=k,tb_bin=tb,method=method)
-                # All hyperparameters are fixed before looking up this event's
-                # target. Per-event waveform fitting uses observations only.
                 if method in ('cnn','cnn_hough'):inference_cfg['checkpoint']=str(checkpoint)
-                found=find_event(q,inference_cfg)
-                metric=separation_metrics(found['fractions'],truth,charge)
-                probabilities.append(metric.pop('aligned_fractions'));scores.append(metric)
-                diags[method]=found['diagnostics'];timings.append(found['diagnostics']['seconds'])
+                started=perf_counter();predicted_slot_count=-1;evaluation_padding_count=0;found=None;inference_error=None
+                try:
+                    if method=='sequential_vertex':
+                        from .algorithms.sequential_finding import find_event as sequential_find_event
+                        found=sequential_find_event(_finding_observation_record(record),inference_cfg)
+                    else:found=find_event(q,inference_cfg)
+                except Exception as error:
+                    inference_error=error
+                if handoff is not None:
+                    # Fresh native slots are persisted BEFORE truth-based PIT,
+                    # reference angles, visibility scores, or evaluation padding.
+                    # Schema/closure/real I/O errors deliberately propagate and
+                    # abort all still-temporary output contexts.
+                    if inference_error is None:
+                        handoff.write(method,record,found=found,observation_diagnostic=diagnostic)
+                    else:
+                        handoff.write(method,record,error=inference_error,observation_diagnostic=diagnostic)
+                if reference_metric is None:
+                    # Invalid references are data-integrity failures, not a
+                    # method failure; ExitStack aborts every temporary output.
+                    reference_metric=separation_metrics(truth,truth,charge)
+                    reference_angles=_reference_projected_angles(label,k)
+                try:
+                    if inference_error is not None:raise inference_error
+                    raw_fractions=np.asarray(found['fractions'])
+                    if raw_fractions.ndim==4:predicted_slot_count=int(len(raw_fractions)-1)
+                    fractions=_evaluation_fractions(found,k,charge.shape)
+                    evaluation_padding_count=k-predicted_slot_count
+                    metric=separation_metrics(fractions,truth,charge)
+                    method_diag=dict(found.get('diagnostics',{}));prediction_valid=True
+                    aligned=metric.pop('aligned_fractions')
+                except Exception as error:
+                    # Keep the frozen event; NaN prediction and undefined score
+                    # cannot masquerade as zero error. No fallback method runs.
+                    method_diag=dict(status='evaluation_method_failed',ambiguous=True,
+                        error_type=type(error).__name__,error_message=str(error),seconds=perf_counter()-started)
+                    metric={name:(value.copy() if isinstance(value,np.ndarray) else value)
+                            for name,value in reference_metric.items() if name!='aligned_fractions'}
+                    aligned=np.full((k+1,*charge.shape),np.nan,dtype=np.float32);prediction_valid=False
+                method_diag['evaluation_slot_alignment']=dict(predicted_slot_count=predicted_slot_count,
+                    reference_maximum_k=k,zero_padded_alpha_slots=evaluation_padding_count,
+                    scope='evaluation matching only; padded zero slots are not found tracks; background unchanged')
+                metric.update(predicted_slot_count=predicted_slot_count,evaluation_padding_count=evaluation_padding_count)
+                metric=_annotate_finding_score(metric,method_diag,prediction_valid)
+                angular=_component_centroid_ols_angles(found,k,metric['slot_permutation'],prediction_valid)
+                angle_error=np.full(k,np.nan)
+                angle_valid=angular['valid']&reference_angles['valid']
+                angle_error[angle_valid]=(reference_angles['initial_theta_pad_deg'][angle_valid]-angular['theta_pad_deg'][angle_valid]+180.)%360.-180.
+                pair_visible=np.asarray([bool(metric['true_visible'][a] and metric['true_visible'][b]) for a,b in reference_angles['pair_indices']],bool)
+                pair_recovered=np.asarray([bool(pair_visible[j] and metric['recovered'][a] and metric['recovered'][b]) for j,(a,b) in enumerate(reference_angles['pair_indices'])],bool)
+                metric.update(predicted_component_centroid_ols_theta_pad_deg=angular['theta_pad_deg'],
+                    component_centroid_ols_valid=angular['valid'],component_centroid_ols_active_layers=angular['active_layers'],
+                    initial_minus_component_centroid_ols_theta_error_deg=angle_error,
+                    pair_reference_visible=pair_visible,pair_recovered=pair_recovered)
+                method_diag['component_centroid_ols']=dict(status=angular['status'],min_observed_layers=3,strict_layer_peak_adc=40.,
+                    reference_status=reference_angles['status'],initial_local_transport_difference_included=True,physical_3d=False,
+                    truth_used_for_hit_selection=False,alignment='evaluation charge-PIT permutation only')
+                probabilities.append(aligned);scores.append(metric)
+                diags[method]=method_diag;timings.append(float(method_diag.get('seconds',perf_counter()-started)))
                 method_results[method].append(metric)
+            visible_count=int(scores[0]['true_visible_count']);positive_charge=float(reference_metric['positive_charge'])
             arrays=dict(file_index=np.int64(key[0]),entry=np.int64(key[1]),source_group=record['source_group'],
                 positive_waveform=q,reference_fractions=truth.astype(np.float32),
-                predicted_fractions=np.asarray(probabilities,dtype=np.float32),
+                predicted_fractions=np.asarray(probabilities,dtype=np.float32),positive_charge=np.float64(positive_charge),
+                observed_zero_charge=np.uint8(positive_charge==0),reference_visible_count=np.int64(visible_count),
+                nonzero_low_visible=np.uint8(positive_charge>0 and visible_count<k),
+                reference_initial_theta_pad_deg=reference_angles['initial_theta_pad_deg'],
+                reference_initial_theta_pad_valid=reference_angles['valid'].astype(np.uint8),
+                reference_pair_indices=reference_angles['pair_indices'],
+                reference_pair_delta_theta_pad_deg=reference_angles['pair_delta_theta_pad_deg'],
+                predicted_component_centroid_ols_theta_pad_deg=np.asarray([m['predicted_component_centroid_ols_theta_pad_deg'] for m in scores]),
+                initial_minus_component_centroid_ols_theta_error_deg=np.asarray([m['initial_minus_component_centroid_ols_theta_error_deg'] for m in scores]),
+                component_centroid_ols_valid=np.asarray([m['component_centroid_ols_valid'] for m in scores],dtype=np.uint8),
+                component_centroid_ols_active_layers=np.asarray([m['component_centroid_ols_active_layers'] for m in scores],dtype=np.int64),
+                pair_reference_visible=np.asarray([m['pair_reference_visible'] for m in scores],dtype=np.uint8),
+                pair_recovered=np.asarray([m['pair_recovered'] for m in scores],dtype=np.uint8),
                 charge_l1=np.asarray([m['charge_l1'] for m in scores]),
+                charge_l1_defined=np.asarray([m['charge_l1_defined'] for m in scores],dtype=np.uint8),
+                prediction_valid=np.asarray([m['prediction_valid'] for m in scores],dtype=np.uint8),
+                predicted_slot_count=np.asarray([m['predicted_slot_count'] for m in scores],dtype=np.int64),
+                evaluation_padding_count=np.asarray([m['evaluation_padding_count'] for m in scores],dtype=np.int64),
+                method_failed=np.asarray([m['method_failed'] for m in scores],dtype=np.uint8),
+                method_ambiguous=np.asarray([m['method_ambiguous'] for m in scores],dtype=np.uint8),
+                ambiguity_assessment_known=np.asarray([m['ambiguity_assessment_known'] for m in scores],dtype=np.uint8),
+                method_declaration_success=np.asarray([m['method_declaration_success'] for m in scores],dtype=np.uint8),
                 overlap_fraction_mae=np.asarray([m['overlap_fraction_mae'] for m in scores]),
                 recovered_slots=np.asarray([m['recovered'] for m in scores],dtype=np.uint8),
                 visible_slots=np.asarray([m['true_visible'] for m in scores],dtype=np.uint8),
@@ -353,17 +645,34 @@ def evaluate_finding_comparison(manifest,split_manifest,checkpoint,output_root,o
         summary={}
         for method,values in method_results.items():
             if len(values)!=len(selected):raise ValueError('Evaluation did not cover every frozen test event')
-            overlap=np.asarray([x['overlap_fraction_mae'] for x in values]);finite=overlap[np.isfinite(overlap)]
-            summary[method]=dict(N_events=len(values),mean_event_charge_l1=float(np.mean([x['charge_l1'] for x in values])),
-                pooled_charge_l1=float(sum(x['absolute_charge_error'] for x in values)/sum(x['positive_charge'] for x in values)),
-                mean_event_overlap_fraction_mae=float(finite.mean()) if len(finite) else None,
-                overlap_events=len(finite),recovered_visible_slots=int(sum(x['recovered'].sum() for x in values)),
-                true_visible_slots=int(sum(x['true_visible'].sum() for x in values)))
-        writer.metrics({m+'_mean_event_charge_l1':v['mean_event_charge_l1'] for m,v in summary.items()})
+            summary[method]=_finding_coverage_summary(values,maximum_k)
+        root_metrics={}
+        for method,values in summary.items():
+            for name in ('fixed_cohort_events','positive_charge_events','zero_charge_events','nonzero_low_visible_events',
+                         'scored_active_events','unscored_active_events','mean_active_event_charge_l1','pooled_charge_l1',
+                         'pooled_charge_coverage','method_failed_events','ambiguous_events','ambiguity_unknown_events',
+                         'method_declaration_success_fraction_all_cohort','fixed_all_reference_slots',
+                         'component_centroid_ols_valid_slots','paired_initial_theta_error_slots','initial_theta_error_slot_coverage',
+                         'conditional_initial_minus_component_centroid_ols_theta_bias_deg',
+                         'conditional_initial_minus_component_centroid_ols_theta_std_deg',
+                         'conditional_initial_minus_component_centroid_ols_theta_rmse_deg',
+                         'fixed_all_reference_pairs','reference_visible_pairs','recovered_reference_visible_pairs','recovered_reference_visible_pair_fraction'):
+                root_metrics[method+'_'+name]=np.nan if values[name] is None else values[name]
+            for n,count in values['visibility_count_events'].items():root_metrics[method+'_all_cohort_visible_'+n+'_events']=count
+        writer.metrics(root_metrics)
         for method,values in method_results.items():
-            writer.histogram(method+'_charge_l1',[x['charge_l1'] for x in values],bins=30,range=(0,2))
-            writer.histogram(method+'_overlap_fraction_mae',[x['overlap_fraction_mae'] for x in values],bins=30,range=(0,1))
+            writer.histogram(method+'_positive_charge_defined_event_charge_l1',
+                [v['charge_l1'] for v in values if v['positive_charge']>0 and v['charge_l1_defined']],bins=30,range=(0,2))
+            writer.histogram(method+'_defined_overlap_fraction_mae',[v['overlap_fraction_mae'] for v in values],bins=30,range=(0,1))
+            writer.histogram(method+'_conditional_initial_minus_component_centroid_ols_theta_error_deg',
+                np.concatenate([v['initial_minus_component_centroid_ols_theta_error_deg'] for v in values]),bins=60)
+            writer.histogram(method+'_all_cohort_reference_visible_count',[v['true_visible_count'] for v in values],
+                bins=maximum_k+1,range=(-.5,maximum_k+.5))
+            writer.histogram(method+'_all_cohort_zero_charge',[v['zero_charge'] for v in values],bins=2,range=(-.5,1.5))
+            writer.histogram(method+'_all_cohort_method_failed',[v['method_failed'] for v in values],bins=2,range=(-.5,1.5))
+            writer.histogram(method+'_all_cohort_method_declaration_success',[v['method_declaration_success'] for v in values],bins=2,range=(-.5,1.5))
     result=dict(metadata=metainfo,summary=summary,per_event=per_event)
+    output_json.parent.mkdir(parents=True,exist_ok=True)
     with output_json.open('x') as stream:json.dump(jsonable(result),stream,indent=2,allow_nan=False)
     return result
 
