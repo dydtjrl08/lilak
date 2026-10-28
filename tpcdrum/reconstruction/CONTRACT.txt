@@ -1,0 +1,90 @@
+TPCDrum reconstruction development contract — 2026-10-27
+
+Full objective is in REQUIREMENTS.json. This is not a completion claim.
+
+Python package root: tpcdrum/reconstruction (import reconstruction with parent tpcdrum on sys.path).
+Python>=3.8, NumPy required; SciPy/torch for algorithms; Uproot+Awkward for ROOT stage files.
+ROOT macro entrypoints belong in tpcdrum/simulation, not inside this package.
+Each stage MUST be independently reloadable from its previous .root file alone;
+no required NPZ cache, original digi, checkpoint for already-run upstream stages,
+or hidden in-memory model state. Models/calibrations needed by current stage are explicit inputs.
+All ROOT output must be TTree (not RNTuple) for server ROOT6.24 compatibility.
+
+Coordinates:
+  physical points columns (u,v,w) mm = (-X_G4, Z_G4+66, Y_G4+128.8).
+  v is layer/depth coordinate; forward track tangent is (du/dv,1,dw/dv).
+  Raw waveform array (12,64,512), physical native-pad ordering.
+  Native PAD_U_MM = [-36.5..-10.5 (27), -9,-7,..9 (10),10.5..36.5 (27)].
+  Native widths .9 / 1.9 / .9 mm, layer pitch12mm, TB40ns from run metadata.
+  Time is NOT a calibrated physical w unless calibrated_for_charge_mean=true
+  with velocity_mm_per_ns, t0_tb, reference_w_mm and sign explicitly supplied.
+  Geometric finding may work in dimensionless scaled (u,v,time) feature coordinates,
+  which MUST NEVER be silently sent into physical 3D fitting/kinematics.
+
+Per-event arrays (all inference inputs must be observation-only):
+  file_index: scalar int64, entry: scalar int64, source_group: scalar int64
+  positive_waveform: (12,64,512) float32, baseline: (12,64) float32
+  noise_sigma: (12,64) float32, si_edep_mev: (n_detectors,) float64
+  si_center_uvw_mm: (n_detectors,3) float64 when measured geometry available.
+  MC track-specific Si deposits are NOT observed inputs; use per-module totals only.
+  Prepared direct finding data can be time-binned, but retain full waveform in ROOT.
+
+Agent algorithms interfaces (actual functions can add documented kwargs):
+  finding.find_event(positive_waveform, config, prior=None) -> dict
+    components (K,12,64,512), background (12,64,512),
+    fractions (K+1,12,64,nt), feature_lines (K,6),
+    diagnostics dict with per-hypothesis evidence and ambiguity/identifiability.
+    K is configured or explicitly compared as hypotheses; do not claim automatic K
+    merely because a fixed-K checkpoint produces K slots. No truth input in API.
+  smoother.fit_track(points_uvw_mm, covariance_mm2, config, energy_mev=None,
+                     stopping_table=None) -> dict
+    order by v; all xyz axes physical mm. Return states (N,5)=(u,w,tu,tw,T)
+    and covariances (N,5,5), fitted points, initial downstream direction,
+    innovation residuals, pulls and fit quality. Explicit fallback to 4D permitted
+    only when energy treatment is labelled, never fabricate physical inputs.
+  physics.inverse_energy(energy_at_si_mev, path_segments, tables, ...) -> dict
+    no out-of-table extrapolation or silently omitted material. Range/DEDX units explicit.
+  physics.four_vectors(kinetic_mev, directions_uvw, mass_mev) -> (K,4), columns(px,py,pz,E).
+  physics.kinematics(vectors, parent_ground_mass_mev) -> dict:
+    invariant_mass_mev, excitation_mev (NOT invariant mass itself=7.654),
+    boosted four-vectors, COM pair opening angles, Dalitz energies/fractions,
+    residual momentum and conservation checks. NO 120deg constraint by default.
+
+All floating physical uncertainty/precision claims need held-out actual data evidence.
+Synthetic tests validate mathematics/software only. Existing MC is old phase-space,
+not necessarily new equal-energy DDE. New DDE digi has NOT yet been produced by user.
+User will place new data in ~/workspace/lilak_seunghwan/tpcdrum/simulation.
+Do not call a model trained merely because the class is implemented. Do not claim a
+calibration is present merely because a config lists fields. Missing information must
+be exported with explicit commands, and stages must give inspectable missing-input status.
+Truth for evaluation lives in a separate ROOT file/view, NEVER in inference arguments.
+Evaluation outputs are attached to stage ROOT under separate metrics/histogram objects.
+
+Kinematics acceptance:
+  Finite M/Ex/COM/Dalitz values are candidate calculations, not evidence that
+  overlapping tracks were uniquely separated. New kinematics_ok and
+  kinematics_method_accepted both require an explicit valid, non-ambiguous
+  finding declaration in addition to resolved energies and an accepted direction
+  reference. Missing, malformed or conflicting finding confidence never counts
+  as final method acceptance. Refit/vertex changes invalidate old acceptance.
+  Assessment is a method declaration, NOT a calibrated probability or an
+  independently established detector-accuracy claim. Legacy ROOT candidates
+  without assessment evidence stay candidates in current success metrics.
+
+Stored timing settings:
+  A metadata value and an external filename prove neither the response bytes
+  used by a historical binary nor the effective time-to-position relationship.
+  read_stored_parameters.py reads only bounded top-level metadata, preserving
+  cycles/order/duplicates and hashing the key payload; it never enables drift
+  calibration. Actual input metadata must be inspected locally;
+  pulse-centroid offset, field/drift response and historical asset identity are
+  still unverified. See calibration/README_timing_audit.txt for collection.
+
+Shared ownership during implementation:
+  root: stage_io, raw ingestion, preprocessing, space points, workflow, CLI/macros,
+        config, audit/requirements, integration, non-overwriting delivery, GitHub.
+  finding agent: algorithms/finding.py, algorithms/waveform_models.py,
+        training_finding.py, checks/test_finding.py, references/finding.txt.
+  dynamics agent: algorithms/smoother.py, checks/test_smoother.py, references/fitting.txt.
+  physics agent: algorithms/physics.py, calibration/export_* and collection commands,
+        checks/test_physics.py, references/physics.txt.

@@ -1,0 +1,110 @@
+{
+  "objective_status": "active",
+  "date": "2026-10-27",
+  "requirements": [
+    {
+      "id": "R01",
+      "requirement": "Inspect current actual digitization data and calibration availability",
+      "state": "existing_inputs_inspected_new_dde_missing",
+      "evidence": "Existing digitization and small Si-energy branch samples inspected. Saved metadata decoded dictionary-free; actual settings/UUIDs/hashes retained locally. External transport/response assets and new DDE input remain unavailable."
+    },
+    {
+      "id": "R02",
+      "requirement": "Package under tpcdrum/reconstruction with runnable simulation macros",
+      "state": "implemented_pending_server_validation",
+      "evidence": "reconstruction/run.py + simulation ROOT launch/view macros + notebook; local native ROOT launch/view verified."
+    },
+    {
+      "id": "R03",
+      "requirement": "Self-contained per-stage ROOT files reloadable as downstream inputs",
+      "state": "software_handoff_verified",
+      "evidence": "TTree waveform/shape/metadata + all-stage handoff; earlier ROOT deleted in integration test; downstream imported material energy works after external CSV/JSON deletion."
+    },
+    {
+      "id": "R04",
+      "requirement": "Distinct space-point and direct-waveform reconstruction routes",
+      "state": "implemented_existing_data_smoke_verified",
+      "evidence": "Actual entries 0 and 5 run through both direct-waveform and explicit space-point paths; physical drift unavailable, correctly marked incomplete."
+    },
+    {
+      "id": "R05",
+      "requirement": "Hough, RANSAC and additional track-finding methods with comparison",
+      "state": "implemented_small_pilot_evaluated",
+      "evidence": "Frozen 7-test event comparison of CNN, Hough, RANSAC, TLS, CNN+Hough, waveform hypotheses. Not optimized or new-DDE validation."
+    },
+    {
+      "id": "R06",
+      "requirement": "Neighbor/layer-conditioned overlapping-waveform hypotheses and evidence tests",
+      "state": "implemented_physical_response_validation_pending",
+      "evidence": "Whole-pad heldout prediction, per-hypothesis residual/conditioning/identifiability tests; model mismatch and exact overlap retain ambiguity."
+    },
+    {
+      "id": "R07",
+      "requirement": "Advanced CNN model, training and held-out actual-data evaluation",
+      "state": "small_actual_pilot_trained_production_pending",
+      "evidence": "48 old 3C3 events; source-group34/7/7; width8 5epochs; frozen validation-best epoch3; CNN-only weaker than geometry. New-DDE training pending."
+    },
+    {
+      "id": "R08",
+      "requirement": "Advanced Kalman-family fitting/smoothing with justified material/noise inputs",
+      "state": "software_verified_material_calibration_pending",
+      "evidence": "4D linear RTS; energy-aware EKF/UKF RTS; robust DAF/Huber; first-point-energy refit; separate sequence-CNN bridge. Native calibrated performance not established."
+    },
+    {
+      "id": "R09",
+      "requirement": "Si track association and three-alpha vertex energy reconstruction through material dE/dx",
+      "state": "software_verified_native_validation_pending",
+      "evidence": "Per-name module association at last local tangent/Si front face; strict per-event navigator path import; no shared-Si equal splitting; actual native exporter server run pending."
+    },
+    {
+      "id": "R10",
+      "requirement": "Accurate reconstructed trajectories, invariant mass, COM opening angles validated independently",
+      "state": "pending_actual_physics_validation",
+      "evidence": "M/Ex/COM/Dalitz calculation implemented without120degree constraint; initial production direction not silently equated with first observed tangent. Precision requires new data/calibration."
+    },
+    {
+      "id": "R11",
+      "requirement": "Per-stage ROOT algorithm performance and failure/coverage diagnostics",
+      "state": "software_performance_and_failure_coverage_verified",
+      "evidence": "Independent mass/energy/vertex/angle residuals plus fixed-cohort angular benchmark, before/after common-valid comparisons and confidence-vs-conditional recovery separation. Actual new-DDE precision pending. Candidate and strict accepted kinematics stay separate through ROOT handoff, aggregate counts, COM histograms and MC residuals; missing/malformed/ambiguous finding never accepted."
+    },
+    {
+      "id": "R12",
+      "requirement": "Missing Kalman/calibration information export and transfer commands",
+      "state": "commands_implemented_server_export_pending",
+      "evidence": "Stdlib collector and actual Geant4 material/geometry/path exporter; commands and scp-P5522 in calibration README. No gas/GEM modifications. Current configuration, saved ROOT asset references, and same-name unverified candidates collected separately; native metadata comment/cycle semantics and failure continuity checked. Exact commands in README_timing_audit.txt."
+    },
+    {
+      "id": "R13",
+      "requirement": "GitHub delivery without pull or overwriting existing server files",
+      "state": "published_additions_only_delivery",
+      "evidence": "Draft PR3 codex/staged-tpc-reconstruction; source-only follow-up to92bba270a. Safe new-clone delivery and exclusive installer preserve existing server files. Exact final commit/tree/checksums in external delivery receipt."
+    },
+    {
+      "id": "R14",
+      "requirement": "End-to-end test on user's new equal-energy DDE digi, uncertainty/closure and zero truth leakage",
+      "state": "pending_new_dde_input",
+      "known_fact": "New DDE digitization has not been produced yet",
+      "evidence": "User confirmed digitization has not yet been produced and will place files in simulation; no end-to-end DDE mass or angular-resolution claim."
+    },
+    {
+      "id": "R15",
+      "requirement": "Sequential clean seed -> soft peel -> second track -> pair vertex region -> third-track waveform hypothesis",
+      "state": "implemented_pilot_evaluated_not_physically_validated",
+      "evidence": "20 software checks and old-MC24 source-group-disjoint pilot; K1/2/3 compared, original waveforms retained, ambiguity preserved."
+    },
+    {
+      "id": "R16",
+      "requirement": "Common-vertex refitting from original measurements with fair free/joint comparison and failure cases",
+      "state": "implemented_software_and_projected_pilot_verified",
+      "evidence": "12 core +3 ROOT bridge +3 local observation tests. No duplicate vertex information; parallel regions, common-clock nuisance, external-origin and quality guards;2D2free-lines no falsegain."
+    },
+    {
+      "id": "R17",
+      "requirement": "Angular-separation recovery/merge/split and before/after precision with fixed denominator",
+      "state": "implemented_projected_pilot_precision_pending",
+      "evidence": "15 benchmark tests; same24 source groups,18eligible closestpairs, fixed P/R=.5 and2-visible-layer criterion. Conditional and method-accepted recovery separate; all methods abstained from unique physical-separation claims."
+    }
+  ],
+  "completion_rule": "All requirements need authoritative evidence; mathematical/synthetic tests cannot establish actual physics accuracy. Objective remains incomplete while required evidence is missing; execution can be blocked pending external inputs."
+}

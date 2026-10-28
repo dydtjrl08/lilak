@@ -1,0 +1,143 @@
+{
+  "scope": "Old-MC24 fixed source groups; closest pair; proxy-model projected UV only, not new-DDE physical precision",
+  "configuration_frozen_before_scoring": true,
+  "rows": [
+    {
+      "method": "Hough",
+      "eligible_closest_pairs": 18,
+      "conditional_recovered_pairs": 11,
+      "accepted_recovered_pairs": 0,
+      "pair_merges": 0,
+      "pair_fake_splits": 5,
+      "theta_2d_before": {
+        "N": 36,
+        "rmse": 1.78840320236804
+      },
+      "theta_2d_after": {
+        "N": 28,
+        "rmse": 1.6717361397909571
+      },
+      "theta_2d_common_before": {
+        "N": 28,
+        "rmse": 1.7951205171420013
+      },
+      "theta_2d_common_after": {
+        "N": 28,
+        "rmse": 1.6717361397909571
+      },
+      "vertex_2d_common_before": {
+        "N": 14,
+        "rmse": 28.295120803812537
+      },
+      "vertex_2d_common_after": {
+        "N": 14,
+        "rmse": 28.30974101944612
+      }
+    },
+    {
+      "method": "RANSAC",
+      "eligible_closest_pairs": 18,
+      "conditional_recovered_pairs": 11,
+      "accepted_recovered_pairs": 0,
+      "pair_merges": 0,
+      "pair_fake_splits": 5,
+      "theta_2d_before": {
+        "N": 36,
+        "rmse": 1.9021772242122499
+      },
+      "theta_2d_after": {
+        "N": 28,
+        "rmse": 1.8201819680273974
+      },
+      "theta_2d_common_before": {
+        "N": 28,
+        "rmse": 1.9354986611552412
+      },
+      "theta_2d_common_after": {
+        "N": 28,
+        "rmse": 1.8201819680273974
+      },
+      "vertex_2d_common_before": {
+        "N": 14,
+        "rmse": 23.061059149457357
+      },
+      "vertex_2d_common_after": {
+        "N": 14,
+        "rmse": 23.089806499491196
+      }
+    },
+    {
+      "method": "CNN_Hough",
+      "eligible_closest_pairs": 18,
+      "conditional_recovered_pairs": 12,
+      "accepted_recovered_pairs": 0,
+      "pair_merges": 4,
+      "pair_fake_splits": 3,
+      "theta_2d_before": {
+        "N": 36,
+        "rmse": 1.807306993417234
+      },
+      "theta_2d_after": {
+        "N": 28,
+        "rmse": 1.6757479019859425
+      },
+      "theta_2d_common_before": {
+        "N": 28,
+        "rmse": 1.795755026484293
+      },
+      "theta_2d_common_after": {
+        "N": 28,
+        "rmse": 1.6757479019859425
+      },
+      "vertex_2d_common_before": {
+        "N": 14,
+        "rmse": 23.556884600877897
+      },
+      "vertex_2d_common_after": {
+        "N": 14,
+        "rmse": 23.5709739968418
+      }
+    },
+    {
+      "method": "Sequential",
+      "eligible_closest_pairs": 18,
+      "conditional_recovered_pairs": 11,
+      "accepted_recovered_pairs": 0,
+      "pair_merges": 1,
+      "pair_fake_splits": 0,
+      "theta_2d_before": {
+        "N": 27,
+        "rmse": 0.8895093942109148
+      },
+      "theta_2d_after": {
+        "N": 19,
+        "rmse": 0.5975937886855798
+      },
+      "theta_2d_common_before": {
+        "N": 19,
+        "rmse": 0.7819629325227976
+      },
+      "theta_2d_common_after": {
+        "N": 19,
+        "rmse": 0.5975937886855798
+      },
+      "vertex_2d_common_before": {
+        "N": 11,
+        "rmse": 17.04721650449447
+      },
+      "vertex_2d_common_after": {
+        "N": 11,
+        "rmse": 17.053540680750594
+      }
+    }
+  ],
+  "limits": [
+    "24events and18eligible closestpairs only",
+    "Si observations absent",
+    "Physical drift not calibrated",
+    "Initial truth direction differs from first observed/global straight-fit definition",
+    "Ambiguity retained; zero method-accepted pair recoveries",
+    "Full-cohort and common-valid comparison must both be inspected"
+  ],
+  "privacy_note": "Historical aggregate rows are unchanged; event identities and individual run receipts are omitted from the public source package. No new study results are added."
+}

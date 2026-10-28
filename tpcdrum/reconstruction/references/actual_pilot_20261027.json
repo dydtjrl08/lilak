@@ -1,0 +1,17 @@
+{
+  "scope": "Generic public source package; historical pilot details are retained separately",
+  "status": "user_data_and_research_results_not_included",
+  "dataset_identities_included": false,
+  "split_event_indices_included": false,
+  "checkpoint_hashes_or_weights_included": false,
+  "calibration_metadata_or_coefficients_included": false,
+  "performance_results_included": false,
+  "physics_accuracy_validated": false,
+  "usage": "Supply your own observation ROOT, source-group split and trained checkpoint explicitly. Evaluate every frozen test case and retain failure and score coverage.",
+  "limits": [
+    "Synthetic software checks do not establish detector accuracy",
+    "An observed-waveform decomposition is not proof of unique physical identifiability",
+    "Physical trajectories, Si energy inversion and mass correlations require separately validated inputs",
+    "No 120-degree or equal-energy constraint is imposed on reconstruction"
+  ]
+}

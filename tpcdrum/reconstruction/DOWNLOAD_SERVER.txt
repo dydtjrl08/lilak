@@ -1,0 +1,21 @@
+새 폴더에서 코드 받기 (기존 checkout에 pull하지 않음)
+
+  git clone --depth 1 --single-branch --branch codex/staged-tpc-reconstruction \
+    https://github.com/dydtjrl08/lilak.git lilak_reco_timing
+
+기존 reconstruction이 있으면 새 clone의 notebook/run.py를 직접 실행한다.
+새 파일 설치는 install_new_reconstruction.py로 가능하며 기존 경로가 있으면 중지한다.
+입력 ROOT, 원래 simulation checkout, Python 환경은 사용자의 실제 경로로 지정한다.
+
+자료 수집 예시 (환경변수를 실제 경로로 설정한 뒤 실행):
+
+  python3 "$RECO_CODE/calibration/export_collect_inputs.py" \
+    --repo "$RECO_REPO" --digi "$RECO_DIGI" \
+    --asset-root "$RECO_ASSET_ROOT" --output "$RECO_OUTPUT" \
+    --geant4-material-export
+
+코드는 새 clone에서 실행하지만 --repo는 실제 빌드/물리 설정이 있는 checkout이다.
+새 출력 폴더만 사용한다. ROOT/Geant4 서버 실행은 현지 환경 검증이 필요하다.
+현재 설정, 저장된 ROOT 설정과 동명 asset 후보는 각각 구분한다.
+개인화된 SSH 주소/서버 경로/실제 metadata 감사 결과는 이 공개 코드에 포함하지 않는다.
+자세한 설명은 calibration/README_timing_audit.txt를 참조한다.

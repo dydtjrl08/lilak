@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-27",
+  "objective_complete": false,
+  "software_checks": {
+    "tests": 241,
+    "passed": 240,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0,
+    "native_root_crosscheck": true,
+    "log": "tmp/reconstruction_public_candidate_metadata_final_checks.log",
+    "suite_scope": "Final generic public candidate including forward-waveform availability metadata correction: synthetic/native ROOT and temporary own-checkpoint fixtures; no actual held-out test200 inference, detector accuracy or target-server runtime claim",
+    "skipped_checks": [
+      {
+        "test": "test_actual_3c3_metadata_decodes_without_any_ttree_read",
+        "reason": "User original ROOT is not supplied in the generic source checkout"
+      }
+    ]
+  },
+  "local_environment": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "scipy": "1.18.1",
+    "uproot": "5.7.7",
+    "awkward": "2.14.0",
+    "torch": "2.14.0",
+    "root": "6.40.02"
+  },
+  "target_server_environment": {
+    "root": "6.24/06",
+    "torch": "1.10.1+cu113",
+    "native_execution_verified": false,
+    "numpy_constraint": "requirements intentionally restrict NumPy<2 for legacy Torch; a full legacy-runtime matrix has not been run"
+  },
+  "actual_inputs": {
+    "old_3C3_events": 44211,
+    "inspected_native_wave_entries": [
+      0,
+      5
+    ],
+    "si_edep_present": false,
+    "actual_two_path_stage_ROOT_smoke": true,
+    "missing_calibration_propagation_verified": true,
+    "whole_dataset_end_to_end_validation": false,
+    "stored_parameter_container_decoded_without_LILAK": true,
+    "actual_transport_assets_available": false
+  },
+  "training": "references/actual_pilot_20261027.json",
+  "pending": [
+    "New equal-energy DDE digitization",
+    "Actual charge-mean drift/t0/PRF calibration",
+    "Native server Geant4 material/geometry/path export compilation and execution",
+    "Si energy/dead-layer/stopping and covariance inputs",
+    "Independent held-out trajectory, vertex, energy, mass, angular-resolution/coverage validation"
+  ],
+  "accuracy_claim": "None. Synthetic math closure and a small old-data pilot do not establish new-DDE detector precision.",
+  "sequential_vertex_study": {
+    "events": 24,
+    "eligible_closest_pairs": 18,
+    "prior_pilot_source_groups_excluded": 49,
+    "configuration_frozen_before_scoring": true,
+    "new_dde": false,
+    "physical_3d_calibrated": false,
+    "method_accepted_pairs_all_methods": 0,
+    "source": "references/sequential_vertex_pilot_20261027.json",
+    "definition": "Conditional charge-attribution recovery, projected initial-truth angle errors; not physical detector precision"
+  },
+  "timing_evidence": "Metadata audit retained locally; generic collector guide in calibration/README_timing_audit.txt",
+  "strict_acceptance": {
+    "finite_candidate_does_not_imply_accepted": true,
+    "unknown_ambiguous_or_malformed_finding_is_not_accepted": true,
+    "stage_ROOT_counts_histograms_and_MC_residuals_share_strict_flag": true,
+    "acceptance_declaration_is_not_calibrated_physics_certainty": true
+  },
+  "release_followup": {
+    "scope": "Generic software fixture coverage, not actual detector performance",
+    "status": "generic_source_fixture_validation_passed",
+    "changes": [
+      "Independent observation-only finding ROOT handoff before evaluation slot alignment",
+      "Valid K0 versus unavailable inference and fixed event/charge coverage",
+      "Explicit fixed angular benchmark event keys",
+      "Separate observation/truth historical-MC timing tools"
+    ],
+    "new_actual_calibration_coefficients_or_metadata_included": false,
+    "new_model_weights_or_raw_data_included": false,
+    "actual_new_DDE_physics_accuracy_claimed": false,
+    "tests_run": 238,
+    "tests_passed": 237,
+    "tests_skipped": 1
+  }
+}

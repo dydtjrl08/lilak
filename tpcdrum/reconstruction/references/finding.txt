@@ -1,0 +1,126 @@
+Finding / waveform hypotheses / CNN — primary references and exact scope
+Verified 2026-10-27. These references motivate implementation choices; none
+establishes TPCDrum performance or a calibrated detector response here.
+
+1. Christoph Dalitz, Tilman Schramke, Manuel Jeltsch (2017),
+   Iterative Hough Transform for Line Detection in 3D Point Clouds,
+   Image Processing On Line 7, 184–196. DOI 10.5201/ipol.2017.208.
+   https://www.ipol.im/pub/art/2017/208/
+   Implemented direction/intercept voting, orthogonal TLS and iterative soft
+   peeling. geometry_core is our existing project implementation copied into
+   this independent package, not a claim to reproduce the authors' exact code.
+   Counts, scaled metric, directions and thresholds remain explicit configs.
+
+2. Martin A. Fischler, Robert C. Bolles (1981), Random Sample Consensus:
+   A Paradigm for Model Fitting with Applications to Image Analysis and
+   Automated Cartography, Communications of the ACM 24(6), 381–395.
+   DOI 10.1145/358669.358692.
+   Author institution record:
+   https://www.sri.com/publication/artificial-intelligence-pubs/random-sample-consensus-a-paradigm-for-model-fitting-with-applications-to-image-analysis-and-automated-cartography-2/
+   Implemented sample-two-point candidate lines, shared support/TLS/soft
+   assignment. Finite attempts do not certify a global optimum; no claim that
+   256 trials or our diagnostic residual metric is the experimentally optimal one.
+
+3. SciPy nnls official documentation:
+   https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.nnls.html
+   Lawson–Hanson nonnegative least squares: min ||A x-b||_2, x>=0.
+   This package fits nonnegative per-layer component amplitudes using a
+   forward waveform model. SciPy least_squares official documentation:
+   https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html
+   Variable projection alternates NNLS amplitudes with bounded nonlinear
+   geometry optimization. Its residual norm is a working heteroscedastic
+   composite Gaussian objective on positive ADC, NOT exact electronics
+   likelihood, a Poisson count likelihood, or a calibrated significance.
+
+4. Kaiming He et al. (2016), Deep Residual Learning for Image Recognition.
+   https://arxiv.org/abs/1512.03385
+   Residual connections motivate genuine learned residual blocks. NativeWaveform
+   ResUNet is our own 3D architecture, not the published 2D ImageNet ResNet.
+
+5. Ozan Oktay et al. (2018), Attention U-Net: Learning Where to Look for the
+   Pancreas. https://arxiv.org/abs/1804.03999
+   Motivates learned decoder skip gates. Our gates and axial self-attention are
+   independently implemented for 12-layer, 64-pad, time-bucket TPC data. Medical
+   image performance figures cannot be transferred to TPC track separation.
+   PyTorch Conv3d / GroupNorm / MultiheadAttention official API references:
+   https://docs.pytorch.org/docs/stable/generated/torch.nn.Conv3d.html
+   https://docs.pytorch.org/docs/stable/generated/torch.nn.GroupNorm.html
+   https://docs.pytorch.org/docs/stable/generated/torch.nn.MultiheadAttention.html
+
+6. Dong Yu, Morten Kolbaek, Zheng-Hua Tan, Jesper Jensen (ICASSP 2017),
+   Permutation Invariant Training of Deep Models for Speaker-Independent
+   Multi-talker Speech Separation. https://arxiv.org/abs/1607.00325
+   PIT solves arbitrary source-label ordering. Our loss is eventwise minimum
+   over alpha-slot permutations of charge-weighted soft cross entropy, with
+   background fixed and an extra quiet-bin background term. This is an adapted
+   objective, not the same numerical speech-separation loss or evidence that a
+   fixed-K CNN identifies the number of tracks automatically.
+
+Implementation / audit notes
+
+Input to find_event is ONLY positive measured waveforms (12,64,512), an explicit
+config and optional observation-derived prior. There is no MC/120-degree input.
+feature_time=TB*feature_time_scale is UNCALIBRATED; physical-w fitting requires a
+separate explicit charge-mean drift calibration.
+
+Waveform model: pad-integrated Gaussian spatial response times an explicit or
+train-pad-only empirical electronics pulse. Per-layer amplitudes are NNLS fitted;
+track u(v) and peak-TB(v) are shared along layers. Missing/curved tracks or an
+inaccurate PRF can cause model mismatch. Gaussian PRF width is a modelling
+assumption. An explicit array does not by itself prove detector calibration.
+
+Whole-pad holdout: (row+2*layer)%holdout_modulo==holdout_fold is excluded from
+candidate geometry, empirical template estimation, and amplitude/geometry fits.
+The candidate's predictive residual on those neighboring pads is then scored.
+A checkpoint used for candidate seeds is evaluated on the training-pad-masked
+observation, not the heldout event image. External priors require the explicit
+prior_is_heldout_blind contract; otherwise the waveform route refuses them.
+This local holdout is NOT an independent original-event train/test split.
+
+Selection_score = heldout composite chi2 + complexity_penalty*p*log(n_heldout)
+is a BIC-like ranking heuristic, NOT a Bayes factor. Full-waveform residual,
+optimizer status, inactive slots, local template correlations and normal-matrix
+conditioning are exported. Identical response columns cannot determine the two
+individual charges: linear covariance becomes singular and ambiguity is kept.
+
+The final components/background partition actual measured positive charge by
+construction. Separate forward_components/forward_background predict a waveform;
+residual_waveform compares that prediction with observations. Charge conservation
+alone can never validate decomposition accuracy. Conditional amplitude errors
+omit geometry/template uncertainty and nonnegative-boundary effects; they are
+not a calibrated physical uncertainty interval. Model mismatch triggers ambiguity.
+
+Training: python -m reconstruction.training_finding --manifest MANIFEST.json
+--output-dir NEW_DIRECTORY --config TRAIN.json. Manifest needs observations_root,
+truth_root, source_dataset_uuid. StageWriter TTrees (events with embedded __shape)
+or documented flat event TTrees are read lazily. Truth components are in a separate
+ROOT file; source siblings cannot cross train/validation/test. Split keys, source
+UUID, input paths and config are recorded. Input manifest SHA is not a content
+checksum of a multi-GB data file. Validation chooses the checkpoint; test PIT loss
+is evaluated once. No old pilot numbers are inherited. Existing fixed-K checkpoints
+from other architectures cannot be passed off as trained weights for this model.
+
+Default deployed state: architecture and training procedure IMPLEMENTED; actual
+TPC training/independent physics accuracy require new evidence. The checked-in
+software tests include true optimizer steps only on clearly labelled synthetic
+ROOT fixtures. They do not constitute training or validation on the user's data.
+No synthetic test checkpoint is deployed. Untrained checkpoint inference is refused.
+Legacy PyTorch pickle fallback is available only with explicit trusted_checkpoint
+for the user's own verified file; modern restricted weights_only loading is default.
+
+Numerical refinement may use optimization_tb_stride=4 to speed geometry/nuisance
+width updates; set it to 1 for all-TB optimization. Final NNLS amplitudes, all
+heldout predictive scores and forward-model residuals always use all 512 TBs.
+The Gaussian pad sigma can be fitted on training pads within explicit bounds;
+its fitted value is a nuisance model parameter, not a measured diffusion constant.
+A boundary hit, incomplete optimizer, poor full-waveform residual or unresolved
+local charge mixture keeps ambiguity rather than certifying track separation.
+
+Source-group provenance is checked separately from merely assigning equal group
+integers. Production training requires source_group_partition_verified in the
+observation-stage manifest (or source_groups_verified for a documented external
+flat export). Old files lacking original UUID/entry provenance can be used only
+with explicit allow_unverified_source_groups=true; that result records
+original_source_partition_verified=false and cannot establish original-source
+independent physics accuracy. Equal train/test group strings alone do not prove
+that an old unknown mapping contained no siblings.

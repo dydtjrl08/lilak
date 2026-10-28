@@ -1,0 +1,142 @@
+{
+  "input_roots": [
+    "../simulation/C12_DDE_allcomb_3C3_digi_SiEdep.root"
+  ],
+  "root_executable": null,
+  "entries": [
+    0,
+    5
+  ],
+  "n_tracks": 3,
+  "representation": "direct_waveform",
+  "preprocessing": {
+    "pedestal_tb_window": [
+      0,
+      30
+    ],
+    "activity_threshold_adc": 40,
+    "require_zero_front": false
+  },
+  "space_points": {
+    "activity_threshold_adc": 40,
+    "island_fraction_of_peak": 0.02
+  },
+  "finding": {
+    "method": "sequential_vertex",
+    "k": 3,
+    "tb_bin": 4,
+    "seed": 20261027,
+    "activity_threshold_adc": 40,
+    "feature_time_scale": 0.36,
+    "geometry": {
+      "scales_mm": [
+        2,
+        6,
+        4
+      ]
+    },
+    "checkpoint": null,
+    "waveform": {
+      "max_hypotheses": 4,
+      "nonlinear_max_nfev": 8,
+      "compare_k": true,
+      "k_candidates": [
+        1,
+        2,
+        3
+      ],
+      "holdout_modulo": 4,
+      "holdout_fold": 0
+    },
+    "sequential": {
+      "proposal_mode": "direct_waveform",
+      "k_hypotheses": [
+        1,
+        2,
+        3
+      ],
+      "peel_fraction": 0.8,
+      "minimum_clean_seed_layers": 4,
+      "minimum_consecutive_seed_layers": 3,
+      "maximum_pair_hypotheses": 2,
+      "maximum_third_hypotheses_per_pair": 2,
+      "vertex": {
+        "vertex_v_scan_mm": [
+          -500,
+          140
+        ],
+        "first_layer_half_extent_mm": 6.0,
+        "search_range_source": "explicit numerical scan; not a measured reaction-volume boundary"
+      }
+    }
+  },
+  "drift": {
+    "calibrated_for_charge_mean": false,
+    "velocity_mm_per_ns": null,
+    "t0_tb": null,
+    "reference_w_mm": null,
+    "sign": null,
+    "tb_ns": 40
+  },
+  "fitting": {
+    "method": "linear_rts",
+    "process_noise_mode": "none",
+    "minimum_layers": 4,
+    "robust": {
+      "kind": "daf",
+      "annealing_temperatures": [
+        16,
+        8,
+        4,
+        2,
+        1
+      ]
+    }
+  },
+  "vertex": {
+    "max_backward_mm": 500,
+    "max_forward_mm": 0,
+    "condition_limit": 1000000,
+    "method": "joint_tracks",
+    "joint": {
+      "dimension": "auto",
+      "process_noise_mode": "none",
+      "vertex_v_scan_mm": [
+        -500,
+        140
+      ],
+      "first_layer_half_extent_mm": 6.0,
+      "minimum_layers": 3,
+      "max_measurement_reduced_chi2": 10.0,
+      "quality_cut_scope": "working proxy-model gate; not an experimentally calibrated probability"
+    }
+  },
+  "si_geometry": null,
+  "energy": {
+    "stopping_tables": null,
+    "material_paths_validated": false,
+    "material_path_csv": null,
+    "material_path_request_csv": null,
+    "material_path_receipt": null,
+    "association_position_sigma_mm": null,
+    "alpha_stops_in_Si_validated": false,
+    "validated_kinetic_upper_bound_mev": null,
+    "si_energy_sigma_mev": null
+  },
+  "refitting": {
+    "enabled": false
+  },
+  "navigator": {
+    "enabled": false,
+    "repo": "../..",
+    "parameters": "../simulation/SimParameters.mac"
+  },
+  "kinematics": {
+    "direction_reference": "first_observed_plane",
+    "acknowledge_first_point_direction_as_vertex_approximation": false
+  },
+  "masses": {
+    "alpha_mev": null,
+    "carbon12_ground_mev": null
+  }
+}
