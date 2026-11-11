@@ -1,9 +1,13 @@
 // Load libLILAK in ROOT before running this macro on the original simulation MC.
+#include "TCanvas.h"
 #include "TClonesArray.h"
 #include "TFile.h"
+#include "TH1D.h"
+#include "TH2D.h"
 #include "TLorentzVector.h"
 #include "TMath.h"
 #include "TTree.h"
+#include "TUUID.h"
 
 #include <algorithm>
 #include <array>
@@ -42,6 +46,18 @@ int C12_check_equal_energy_mc(const char* filename = "C12_HoyleDirect_100.root")
         std::fprintf(stderr, "INCONCLUSIVE: cannot read MCTrack. Check the loaded LILAK library.\n");
         return 2;
     }
+
+    // Odd bins place the equal-energy point at the center of a Dalitz bin.
+    TH2D dalitz("h_hoyle_dalitz",
+                "Dalitz plot (COM);(#epsilon_{2}-#epsilon_{1})/#sqrt{3};#epsilon_{3}-1/3;Triplets",
+                141, -0.7, 0.7, 141, -0.7, 0.7);
+    TH1D openingAngles("h_hoyle_com_opening",
+                       "Alpha-pair opening angles (COM);Opening angle [deg];Alpha pairs",
+                       181, -0.5, 180.5);
+    dalitz.SetDirectory(nullptr);
+    dalitz.SetStats(false);
+    openingAngles.SetDirectory(nullptr);
+    openingAngles.SetStats(false);
 
     Long64_t selected = 0, noTriplet = 0, ambiguous = 0, invalid = 0, outsideTolerance = 0;
     double maxAngleError = 0., maxFractionError = 0.;
@@ -92,12 +108,17 @@ int C12_check_equal_energy_mc(const char* filename = "C12_HoyleDirect_100.root")
             continue;
         }
 
+        // Use the same fixed track-ID labeling as the Dalitz analysis.
+        auto alphas = *triplet;
+        std::sort(alphas.begin(), alphas.end(), [](const LKMCTrack* a, const LKMCTrack* b) {
+            return a->GetTrackID() < b->GetTrackID();
+        });
         std::array<TVector3, 3> momentum;
         std::array<double, 3> kinetic;
         std::vector<double> masses;
-        const auto vertex = triplet->front()->GetPrimaryPosition();
+        const auto vertex = alphas.front()->GetPrimaryPosition();
         for (int a = 0; a < 3; ++a) {
-            const auto& alpha = *(*triplet)[a];
+            const auto& alpha = *alphas[a];
             const auto position = alpha.GetPrimaryPosition();
             momentum[a].SetXYZ(alpha.GetPX(0), alpha.GetPY(0), alpha.GetPZ(0));
             kinetic[a] = alpha.GetEnergy(0);
@@ -147,13 +168,19 @@ int C12_check_equal_energy_mc(const char* filename = "C12_HoyleDirect_100.root")
             continue;
         }
 
+        const std::array<double, 3> fraction{
+            kinetic[0] / sumKinetic, kinetic[1] / sumKinetic, kinetic[2] / sumKinetic
+        };
+        dalitz.Fill((fraction[1] - fraction[0]) / std::sqrt(3.), fraction[2] - 1. / 3.);
+
         double angleError = 0., fractionError = 0.;
         for (int a = 0; a < 3; ++a) {
             const auto p = four[a].Vect();
             const auto q = four[(a + 1) % 3].Vect();
             const double angle = std::atan2(p.Cross(q).Mag(), p.Dot(q)) * TMath::RadToDeg();
+            openingAngles.Fill(angle);
             angleError = std::max(angleError, std::abs(angle - 120.));
-            fractionError = std::max(fractionError, std::abs(kinetic[a] / sumKinetic - 1. / 3.));
+            fractionError = std::max(fractionError, std::abs(fraction[a] - 1. / 3.));
         }
         ++selected;
         if (angleError > angleToleranceDeg || fractionError > fractionTolerance)
@@ -167,6 +194,18 @@ int C12_check_equal_energy_mc(const char* filename = "C12_HoyleDirect_100.root")
     std::printf("Entries=%lld | triplets=%lld | no triplet=%lld | ambiguous=%lld | invalid=%lld\n",
                 event->GetEntries(), selected, noTriplet, ambiguous, invalid);
     if (selected > 0) {
+        const TString canvasName = TString("c_hoyle_dde_") + TUUID().AsString();
+        auto* canvas = new TCanvas(canvasName, "Hoyle DDE check", 1150, 520);
+        canvas->Divide(2, 1);
+        canvas->cd(1)->SetRightMargin(0.16);
+        dalitz.DrawCopy("COLZ");
+        canvas->cd(2);
+        openingAngles.SetLineColor(kBlue + 1);
+        openingAngles.SetLineWidth(2);
+        openingAngles.DrawCopy("HIST");
+        canvas->Modified();
+        canvas->Update();
+
         std::printf("Max COM |angle-120|=%.6g deg | max |T_i/sum(T)-1/3|=%.6g\n",
                     maxAngleError, maxFractionError);
     }
