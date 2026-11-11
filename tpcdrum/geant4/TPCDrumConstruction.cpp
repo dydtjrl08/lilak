@@ -1,4 +1,5 @@
 #include "TPCDrumConstruction.h"
+#include "../simulation/hoyle_equal_energy_20261026/G4HoyleEqualEnergyModel.hh"
 
 TPCDrumConstruction::TPCDrumConstruction()
 {
@@ -127,7 +128,12 @@ G4VPhysicalVolume* TPCDrumConstruction::Construct()
     G4VFastSimulationModel* fsm;
     fsm = new NPS::BeamReaction("BeamReaction", fReactionRegion);
     fReactionModel.push_back(fsm);
-    fsm = new NPS::Decay("Decay", fReactionRegion);
+    // BEGIN HOYLE_EQUAL_ENERGY_20261026
+    if (HoyleEqualEnergyEnabled())
+        fsm = new G4HoyleEqualEnergyModel("HoyleEqualEnergy", fReactionRegion);
+    else
+        fsm = new NPS::Decay("Decay", fReactionRegion);
+    // END HOYLE_EQUAL_ENERGY_20261026
     fReactionModel.push_back(fsm);
 
     runManager -> SetSensitiveDetector(pvpChamber);
