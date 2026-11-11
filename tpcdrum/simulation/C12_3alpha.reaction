@@ -1,0 +1,55 @@
+Beam
+ Particle = 12C
+ ExcitationEnergy = 0 MeV
+ Energy = 72 MeV
+ SigmaEnergy = 1.0 MeV
+ SigmaThetaX = 0.000 rad
+ SigmaPhiY = 0.000 rad
+ SigmaX = 0.0 mm
+ SigmaY = 0.0 mm
+ MeanThetaX = 0 rad
+ MeanPhiY = 0 rad
+ MeanX = 0 mm
+ MeanY = 0 mm
+ ZEmission = -310.1 mm
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+TwoBodyReaction
+ Beam= 12C
+ Target= 4He
+ Light= 4He
+ Heavy= 12C
+ ExcitationEnergyLight= 0.0 MeV
+ ExcitationEnergyHeavy= 7.65 MeV
+ CrossSectionPath= flat.txt CSR
+ ShootLight= 1
+ ShootHeavy= 1
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% sequential decay mode
+
+%Decay 12C
+% Daughter = 4He 8Be
+% ExcitationEnergy = 0 0 MeV
+% Threshold = 7.65 MeV
+% BranchingRatio = 1.
+% LifeTime = 0 ns
+% Shoot= 1 1
+
+%Decay 8Be
+% Daughter = 4He 4He
+% ExcitationEnergy = 0 0 MeV
+% Threshold = 0 MeV
+% BranchingRatio = 1.
+% LifeTime = 0 ns
+% Shoot= 1 1
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% direct decay mode
+
+Decay 12C
+ Daughter = 4He 4He 4He
+ ExcitationEnergy = 0 0 0 MeV
+ Threshold = 7.65 MeV
+ BranchingRatio = 1.
+ LifeTime = 0 ns
+ Shoot= 1 1 1

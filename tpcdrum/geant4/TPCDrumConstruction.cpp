@@ -1,4 +1,11 @@
 #include "TPCDrumConstruction.h"
+#include "../simulation/hoyle_equal_energy_20261026/G4HoyleEqualEnergyModel.hh"
+#include "NPInputParser.h"
+#include "NPOptionManager.h"
+
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 TPCDrumConstruction::TPCDrumConstruction()
 {
@@ -8,6 +15,22 @@ G4VPhysicalVolume* TPCDrumConstruction::Construct()
 {
     auto runManager = (LKG4RunManager *) G4RunManager::GetRunManager();
     fPar = runManager -> GetParameterContainer();
+
+    const bool hoyleEqualEnergy = fPar->CheckPar("TPCDrum/HoyleEqualEnergy") &&
+                                  fPar->GetParBool("TPCDrum/HoyleEqualEnergy");
+    if (hoyleEqualEnergy) {
+        NPL::InputParser reaction(NPOptionManager::getInstance()->GetReactionFile());
+        const auto decays = reaction.GetAllBlocksWithToken("Decay");
+        const std::vector<std::string> alphaDaughters{"4He", "4He", "4He"};
+        if (decays.size() != 1 || decays.front()->GetMainValue() != "12C" ||
+            !decays.front()->HasToken("Daughter") ||
+            decays.front()->GetVectorString("Daughter") != alphaDaughters) {
+            throw std::runtime_error(
+                "TPCDrum/HoyleEqualEnergy true requires exactly one active Decay block: "
+                "Decay 12C with Daughter = 4He 4He 4He. "
+                "Set HoyleEqualEnergy false to use the NPTool decay channels in the reaction file.");
+        }
+    }
 
     fTPCDrum = new TPCDrum();
 
@@ -127,7 +150,10 @@ G4VPhysicalVolume* TPCDrumConstruction::Construct()
     G4VFastSimulationModel* fsm;
     fsm = new NPS::BeamReaction("BeamReaction", fReactionRegion);
     fReactionModel.push_back(fsm);
-    fsm = new NPS::Decay("Decay", fReactionRegion);
+    if (hoyleEqualEnergy)
+        fsm = new G4HoyleEqualEnergyModel("HoyleEqualEnergy", fReactionRegion);
+    else
+        fsm = new NPS::Decay("Decay", fReactionRegion);
     fReactionModel.push_back(fsm);
 
     runManager -> SetSensitiveDetector(pvpChamber);
