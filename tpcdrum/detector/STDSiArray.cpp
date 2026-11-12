@@ -124,14 +124,8 @@ Int_t STDSiArray::GetAgetID(int siDetID, bool isOhmic)
 {
     if(isOhmic){return 0;}
     if(siDetID<0 || siDetID>=fSiDetNum){return -1;}
-
-    // Follow the actual channel map instead of assuming that detector IDs
-    // 0--3 and 4--7 always belong to fixed AGETs.
-    for(auto it = fChannelMap.begin(); it != fChannelMap.end(); ++it){
-        int aget = it->first.first;
-        int mappedSiDetID = it->second.first;
-        if(aget != 0 && mappedSiDetID == siDetID){return aget;}
-    }
+    if(3 <= siDetID && siDetID <= 6){return 1;} // LU, LM, LD, U
+    if(siDetID <= 2 || siDetID == 7){return 2;} // RU, RM, RD, D
     return -1;
 }
 
@@ -416,12 +410,9 @@ void STDSiArray::InitChannelMapping()
     for(int block=0; block<fSiDetNum; block++){
         int siDetID = ohmicDetectorOrder[block];
         for(int ohmicID=0; ohmicID<fOhmicNum; ohmicID++){
-            int signalIndex = firstUsedOhmicSignalIndex
-                            + block*fOhmicNum
-                            + (fOhmicNum-1-ohmicID);
+            int signalIndex = firstUsedOhmicSignalIndex + block*fOhmicNum + (fOhmicNum-1-ohmicID);
             int chan = signalChannels[signalIndex];
-            fChannelMap.insert({make_pair(0, chan),
-                                make_pair(siDetID, ohmicID)});
+            fChannelMap.insert({make_pair(0, chan), make_pair(siDetID, ohmicID)});
         }
     }
 
@@ -441,12 +432,11 @@ void STDSiArray::InitChannelMapping()
     for(int aget=1; aget<=2; aget++){
         for(int block=0; block<4; block++){
             int siDetID = junctionDetectorOrder[aget-1][block];
+            
             for(int junctionID=0; junctionID<fJuncNum; junctionID++){
-                int signalIndex = block*fJuncNum
-                                + (fJuncNum-1-junctionID);
+                int signalIndex = block*fJuncNum + (fJuncNum-1-junctionID);
                 int chan = signalChannels[signalIndex];
-                fChannelMap.insert({make_pair(aget, chan),
-                                    make_pair(siDetID, junctionID)});
+                fChannelMap.insert({make_pair(aget, chan), make_pair(siDetID, junctionID)});
             }
         }
     }
