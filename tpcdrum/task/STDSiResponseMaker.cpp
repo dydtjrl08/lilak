@@ -84,9 +84,7 @@ void STDSiResponseMaker::Exec(Option_t *option)
 
             double ohmicEnergy = e;
             MakeOhmicResponse(ohmicEnergy);
-
-	    // [MeV -> eV]
-	    ohmicEnergy = ohmicEnergy*1e+6;
+		    ohmicEnergy = ohmicEnergy*1e+6; // [eV]
 
             fChannel = (GETChannel*)fSiArray -> GetChannelFast(channelIdx_ohmic);
             fChannel -> GetBufferArray()[tb] += ohmicEnergy;
@@ -105,17 +103,9 @@ void STDSiResponseMaker::Exec(Option_t *option)
             double juncEnergy1 = 0;
             double juncEnergy2 = 0;
             MakeJunctionResponse(siDetID, x, z, e, juncEnergy1, juncEnergy2);
-	
-		
-	
-	    // [MeV -> eV]
 
-            juncEnergy1 = juncEnergy1*1e6;
-            juncEnergy2 = juncEnergy2*1e6;
-
-		
-	    // 최종 결과는 eV단위여서, adc를 다시 10^-6을 곱해줘야 합니다. 거기까지는 건들진 않았습니다.
-
+            juncEnergy1 = juncEnergy1*1e6; // [eV]
+            juncEnergy2 = juncEnergy2*1e6; // [eV]
 
             // Junction first pair channel
             fChannel = (GETChannel*)fSiArray -> GetChannelFast(channelIdx_junc1);
@@ -173,7 +163,7 @@ void STDSiResponseMaker::ConvertCoordinateGeantToPad()
 
 void STDSiResponseMaker::MakeOhmicResponse(double& e)
 {
-    double energy = e; // set the ohmic accumulate energy as half
+    double energy = e; // set the ohmic accumulated energy to half
     const double energyResolution = 0.05; // [MeV], 1 MeV resolution at MeV scale
     energy = fRandom -> Gaus(energy, energyResolution);
     e = energy;
@@ -186,16 +176,13 @@ void STDSiResponseMaker::MakeJunctionResponse(int siDetID, double x, double z, d
     double tmpZ = z;
     fSiArray -> ConvertPad2SiLocalPos(siDetID, tmpX, tmpY, tmpZ);
 
-    
-	
-    double energy = e; // set the junction accumulate energy as half
+    double energy = e; // set the junction accumulated energy to half
     const double energyResolution = 0.05; // [MeV], 1 MeV resolution at MeV scale
     energy = fRandom -> Gaus(energy, energyResolution);
 
     double energyRatioSecond = tmpX/fSiArray->GetSiHeight();
     double energyRatioFirst = 1. - energyRatioSecond;
 	
-
     junc1Energy = energy * energyRatioFirst;
     junc2Energy = energy * energyRatioSecond;
 }
